@@ -612,15 +612,20 @@ app.get('/status', requireAuth, (req, res) => {
           box.innerHTML = '<span style="font-size:13px;color:#999;">No sessions found in the next 7 days.</span>';
           return;
         }
-        box.innerHTML = data.sessions.map(s => \`
-          <div class="job-row">
-            <div>
+        const labels = { reminder: '24h', aftercare: 'Aftercare', day_three: 'Day 3', day_seven: 'Day 7' };
+        box.innerHTML = data.sessions.map(s => {
+          const badges = Object.entries(labels).map(([key, label]) => {
+            const sent = s.sent[key];
+            return \`<span style="font-size:11px;padding:2px 7px;border-radius:20px;background:\${sent?'#e6f4ea':'#f0f0f0'};color:\${sent?'#3B6D11':'#999'};">\${sent?'✅':'⬜'} \${label}</span>\`;
+          }).join(' ');
+          return \`<div class="job-row" style="flex-direction:column;align-items:flex-start;gap:6px;">
+            <div style="display:flex;justify-content:space-between;width:100%;align-items:center;">
               <div class="job-label" style="direction:rtl;">\${s.title}</div>
-              <div style="font-size:11px;color:#666;margin-top:2px;">\${s.date} · \${s.time} · \${s.phone}</div>
+              <div style="font-size:11px;color:#666;">\${s.date} · \${s.time}</div>
             </div>
-            <div style="font-size:12px;color:#3B6D11;">✅ parsed</div>
-          </div>
-        \`).join('');
+            <div style="display:flex;gap:4px;flex-wrap:wrap;">\${badges}</div>
+          </div>\`;
+        }).join('');
       } catch(e) {
         box.innerHTML = '<span style="font-size:13px;color:#A32D2D;">❌ Failed to load calendar.</span>';
       }
@@ -658,11 +663,13 @@ app.get('/status', requireAuth, (req, res) => {
 app.get('/api/upcoming-sessions', requireAuth, async (req, res) => {
   try {
     const { getSessionsInRange } = require('./calendar');
+    const { wasAlreadySent } = require('./sent-events');
     const start = new Date();
     start.setHours(0, 0, 0, 0);
     const end = new Date(start);
     end.setDate(end.getDate() + 7);
     const sessions = await getSessionsInRange(start, end);
+    const MSG_TYPES = ['reminder', 'aftercare', 'day_three', 'day_seven'];
     res.json({ ok: true, sessions: sessions.map(s => ({
       firstName: s.firstName,
       fullName: s.fullName,
@@ -670,6 +677,7 @@ app.get('/api/upcoming-sessions', requireAuth, async (req, res) => {
       date: s.startTime.toLocaleDateString('he-IL', { weekday: 'short', day: '2-digit', month: '2-digit', timeZone: 'Asia/Jerusalem' }),
       time: s.timeString,
       title: s.title,
+      sent: Object.fromEntries(MSG_TYPES.map(t => [t, wasAlreadySent(s.id, t)])),
     })) });
   } catch (e) {
     res.json({ ok: false, error: e.message });
