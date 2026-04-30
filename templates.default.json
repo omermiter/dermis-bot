@@ -1,0 +1,8 @@
+{
+  "reminder": "היי {name} 👋\nכאן דרמיס העוזר של עומר\nאני שולח לך תזכורת לגבי התור שלכם מחר לקעקוע ב{time} 🖤",
+  "reminderToArtist": "🖤 Studio reminder: Session with {fullName} is today at {time}.\nClient number: {phone}",
+  "aftercare": "Hi {name}! Thank you so much for today 🖤\n\nHere's your aftercare:\n• Keep the wrap on for 4–6 hours\n• Wash gently with unscented soap\n• Apply a thin layer of moisturizer 2–3x daily\n• No sun, pool, or sea for 3 weeks\n• Don't scratch or pick!\n\nAny questions, just message me 🙌",
+  "dayThree": "Hi {name}! 🖤 Quick check-in — how is your tattoo feeling on day 3?\n\nRemember to keep moisturizing and stay out of the sun. You're in the peeling stage — totally normal!\n\nAny concerns, I'm here 😊",
+  "healingCheckIn": "היי {name} 😊\nאיך הולכת ההחלמה של הקעקוע?\nעומר ביקש ממני לבדוק 😊",
+  "reviewRequest": "היי {name} 😊\nשמחתי לשמוע שההחלמה הולכת טוב!\nאם אתה מרוצה מהתוצאה, היה נחמד מאוד אם תוכל לכתוב לעומר ביקורת קצרה כאן בוואטסאפ 🙏\nזה עוזר לו המון!"
+}
