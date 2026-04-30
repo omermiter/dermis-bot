@@ -1,5 +1,5 @@
 // calendar.js — Reads sessions from Google Calendar
-// Parses event titles like: session_Noa_Cohen
+// Parses event titles like: סשן עם נועה
 // Parses event description for: Phone: 05XXXXXXXX
 
 const { google } = require('googleapis');
@@ -13,17 +13,17 @@ async function getCalendarClient() {
   return google.calendar({ version: 'v3', auth });
 }
 
-// Parse event title: session_Noa_Cohen → { firstName: 'Noa', lastName: 'Cohen', fullName: 'Noa Cohen' }
+// Parse event title: "סשן עם נועה" → { firstName: 'נועה', lastName: '', fullName: 'נועה' }
 function parseTitleName(title) {
-  // Expected format: session_Firstname_Lastname (or session_Firstname_Lastname_extra)
-  const parts = title.trim().split('_');
-  if (parts.length < 3 || parts[0].toLowerCase() !== 'session') return null;
-  const firstName = parts[1];
-  const lastName = parts.slice(2).join(' '); // handles double last names too
+  // Expected format: סשן עם Firstname
+  const prefix = 'סשן עם ';
+  if (!title.startsWith(prefix)) return null;
+  const firstName = title.slice(prefix.length).trim();
+  if (!firstName) return null;
   return {
     firstName,
-    lastName,
-    fullName: `${firstName} ${lastName}`,
+    lastName: '',
+    fullName: firstName,
   };
 }
 
@@ -55,7 +55,7 @@ async function getSessionsInRange(startDate, endDate) {
 
   for (const event of events) {
     const title = event.summary || '';
-    if (!title.toLowerCase().startsWith('session_')) continue; // skip non-session events
+    if (!title.startsWith('סשן עם ')) continue; // skip non-session events
 
     const nameInfo = parseTitleName(title);
     if (!nameInfo) continue;

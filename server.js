@@ -590,9 +590,50 @@ app.get('/status', requireAuth, (req, res) => {
       </div>
     </div>
 
-    <button class="btn" style="width:100%;" onclick="location.reload()">↻ Refresh</button>
+    <div style="display:flex;gap:8px;">
+      <button class="btn" style="flex:1;" onclick="location.reload()">↻ Refresh</button>
+      <button class="btn" id="hc-btn" style="flex:1;background:#1a1a1a;color:white;" onclick="runHealthCheckNow()">🩺 Run Health Check Now</button>
+    </div>
+    <div id="hc-result" style="display:none;margin-top:10px;padding:10px;border-radius:8px;font-size:13px;"></div>
   </div>
+  <script>
+    async function runHealthCheckNow() {
+      const btn = document.getElementById('hc-btn');
+      const result = document.getElementById('hc-result');
+      btn.disabled = true;
+      btn.textContent = '⏳ Running...';
+      result.style.display = 'none';
+      try {
+        const r = await fetch('/run-health-check', { method: 'POST' });
+        const data = await r.json();
+        if (data.ok) {
+          result.style.cssText = 'display:block;margin-top:10px;padding:10px;border-radius:8px;font-size:13px;background:#f0fdf4;color:#3B6D11;';
+          result.textContent = '✅ Health check completed — any missed jobs have been re-run.';
+        } else {
+          result.style.cssText = 'display:block;margin-top:10px;padding:10px;border-radius:8px;font-size:13px;background:#fff1f1;color:#A32D2D;';
+          result.textContent = '❌ Error: ' + data.error;
+        }
+      } catch (e) {
+        result.style.cssText = 'display:block;margin-top:10px;padding:10px;border-radius:8px;font-size:13px;background:#fff1f1;color:#A32D2D;';
+        result.textContent = '❌ Request failed.';
+      }
+      btn.disabled = false;
+      btn.textContent = '🩺 Run Health Check Now';
+      location.reload();
+    }
+  </script>
 </body></html>`);
+});
+
+// ─── Manual health-check trigger ─────────────────────────────────────────────
+app.post('/run-health-check', requireAuth, async (req, res) => {
+  try {
+    const { runHealthCheck } = require('./index');
+    await runHealthCheck();
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
 });
 
 // ─── Start server ────────────────────────────────────────────────────────────
