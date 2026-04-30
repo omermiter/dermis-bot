@@ -79,7 +79,7 @@ async function getSessionsInRange(startDate, endDate) {
       rawPhone: phone,
       startTime: new Date(startTime),
       endTime: new Date(endTime),
-      timeString: new Date(startTime).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' }),
+      timeString: new Date(startTime).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jerusalem' }),
     });
   }
 
