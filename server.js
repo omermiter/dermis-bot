@@ -590,6 +590,11 @@ app.get('/status', requireAuth, (req, res) => {
       </div>
     </div>
 
+    <div class="card">
+      <div class="card-title">📅 Next 7 days — calendar sessions</div>
+      <div id="cal-body"><span style="font-size:13px;color:#999;">Loading…</span></div>
+    </div>
+
     <div style="display:flex;gap:8px;">
       <button class="btn" style="flex:1;" onclick="location.reload()">↻ Refresh</button>
       <button class="btn" id="hc-btn" style="flex:1;background:#1a1a1a;color:white;" onclick="runHealthCheckNow()">🩺 Run Health Check Now</button>
@@ -597,6 +602,30 @@ app.get('/status', requireAuth, (req, res) => {
     <div id="hc-result" style="display:none;margin-top:10px;padding:10px;border-radius:8px;font-size:13px;"></div>
   </div>
   <script>
+    (async () => {
+      const box = document.getElementById('cal-body');
+      try {
+        const r = await fetch('/api/upcoming-sessions');
+        const data = await r.json();
+        if (!data.ok) { box.innerHTML = '<span style="font-size:13px;color:#A32D2D;">❌ ' + data.error + '</span>'; return; }
+        if (data.sessions.length === 0) {
+          box.innerHTML = '<span style="font-size:13px;color:#999;">No sessions found in the next 7 days.</span>';
+          return;
+        }
+        box.innerHTML = data.sessions.map(s => \`
+          <div class="job-row">
+            <div>
+              <div class="job-label" style="direction:rtl;">\${s.title}</div>
+              <div style="font-size:11px;color:#666;margin-top:2px;">\${s.date} · \${s.time} · \${s.phone}</div>
+            </div>
+            <div style="font-size:12px;color:#3B6D11;">✅ parsed</div>
+          </div>
+        \`).join('');
+      } catch(e) {
+        box.innerHTML = '<span style="font-size:13px;color:#A32D2D;">❌ Failed to load calendar.</span>';
+      }
+    })();
+
     async function runHealthCheckNow() {
       const btn = document.getElementById('hc-btn');
       const result = document.getElementById('hc-result');
@@ -623,6 +652,28 @@ app.get('/status', requireAuth, (req, res) => {
     }
   </script>
 </body></html>`);
+});
+
+// ─── Upcoming sessions (calendar preview) ────────────────────────────────────
+app.get('/api/upcoming-sessions', requireAuth, async (req, res) => {
+  try {
+    const { getSessionsInRange } = require('./calendar');
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(start);
+    end.setDate(end.getDate() + 7);
+    const sessions = await getSessionsInRange(start, end);
+    res.json({ ok: true, sessions: sessions.map(s => ({
+      firstName: s.firstName,
+      fullName: s.fullName,
+      phone: s.rawPhone,
+      date: s.startTime.toLocaleDateString('he-IL', { weekday: 'short', day: '2-digit', month: '2-digit', timeZone: 'Asia/Jerusalem' }),
+      time: s.timeString,
+      title: s.title,
+    })) });
+  } catch (e) {
+    res.json({ ok: false, error: e.message });
+  }
 });
 
 // ─── Manual health-check trigger ─────────────────────────────────────────────
