@@ -4,7 +4,9 @@
 const fs = require('fs');
 const path = require('path');
 
-const STORE_FILE = path.resolve('./replies.json');
+const DATA_DIR = process.env.DATA_DIR || '.';
+fs.mkdirSync(DATA_DIR, { recursive: true });
+const STORE_FILE = path.resolve(DATA_DIR, 'replies.json');
 
 // Load existing replies from disk on startup
 function loadReplies() {

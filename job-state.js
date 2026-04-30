@@ -4,7 +4,9 @@
 const fs = require('fs');
 const path = require('path');
 
-const STATE_FILE = path.resolve('./job-state.json');
+const DATA_DIR = process.env.DATA_DIR || '.';
+fs.mkdirSync(DATA_DIR, { recursive: true });
+const STATE_FILE = path.resolve(DATA_DIR, 'job-state.json');
 
 function load() {
   try {
