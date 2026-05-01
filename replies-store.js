@@ -74,4 +74,13 @@ function unreadCount() {
   return replies.filter(r => !r.read).length;
 }
 
-module.exports = { addReply, markRead, markAllRead, getReplies, unreadCount };
+// Remove read replies older than `days` days
+function pruneOldReplies(days = 30) {
+  const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
+  const before = replies.length;
+  replies = replies.filter(r => !r.read || new Date(r.timestamp).getTime() > cutoff);
+  if (replies.length < before) persist();
+  return before - replies.length;
+}
+
+module.exports = { addReply, markRead, markAllRead, getReplies, unreadCount, pruneOldReplies };

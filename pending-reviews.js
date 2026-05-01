@@ -71,4 +71,13 @@ function hasReviewBeenHandled(phone) {
   return pending.some(p => p.phone === phone);
 }
 
-module.exports = { schedule, getDueReviews, markSent, hasReviewBeenHandled };
+// Remove sent review records older than `days` days
+function pruneOldRecords(days = 90) {
+  const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
+  const before = pending.length;
+  pending = pending.filter(p => !p.sent || new Date(p.sentAt || p.sendAt).getTime() > cutoff);
+  if (pending.length < before) persist();
+  return before - pending.length;
+}
+
+module.exports = { schedule, getDueReviews, markSent, hasReviewBeenHandled, pruneOldRecords };

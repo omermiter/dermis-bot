@@ -11,7 +11,9 @@ const messages = require('./messages');
 const { startServer, registerClientPhone, markAwaitingDay7 } = require('./server');
 const pendingReviews = require('./pending-reviews');
 const { markJobCompleted, hasJobRunToday } = require('./job-state');
-const { wasAlreadySent, markSent } = require('./sent-events');
+const { wasAlreadySent, markSent, pruneOldEntries } = require('./sent-events');
+const { pruneOldReplies } = require('./replies-store');
+const { pruneOldRecords } = require('./pending-reviews');
 
 // ─── Helper: log with timestamp ──────────────────────────────────────────────
 function log(msg) {
@@ -175,6 +177,18 @@ async function runHealthCheck() {
 // CRON SCHEDULE
 // ════════════════════════════════════════════════════════════════════════════
 
+// ════════════════════════════════════════════════════════════════════════════
+// WEEKLY CLEANUP — every Sunday at 03:00
+// ════════════════════════════════════════════════════════════════════════════
+
+async function runWeeklyCleanup() {
+  log('🧹 Running weekly data cleanup...');
+  const r1 = pruneOldReplies(30);    // drop read replies older than 30 days
+  const r2 = pruneOldRecords(90);    // drop sent review records older than 90 days
+  const r3 = pruneOldEntries();      // flush sent-events 60-day cutoff
+  log(`🧹 Cleanup done — replies: -${r1}, review records: -${r2}, sent-events: -${r3}`);
+}
+
 // Morning batch at 09:00
 cron.schedule('0 9 * * *', runJob_24hReminders,      { timezone: 'Asia/Jerusalem' });
 cron.schedule('0 9 * * *', runJob_dayThreeAftercare, { timezone: 'Asia/Jerusalem' });
@@ -190,6 +204,9 @@ cron.schedule('*/30 * * * *', runHealthCheck, { timezone: 'Asia/Jerusalem' });
 
 // Refresh client phone map every 6 hours
 cron.schedule('0 */6 * * *', refreshClientPhoneMap, { timezone: 'Asia/Jerusalem' });
+
+// Weekly cleanup — every Sunday at 03:00
+cron.schedule('0 3 * * 0', runWeeklyCleanup, { timezone: 'Asia/Jerusalem' });
 
 // ════════════════════════════════════════════════════════════════════════════
 // EXPORT job functions so the web app can trigger them too (for test messages)

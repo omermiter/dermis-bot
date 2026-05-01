@@ -38,4 +38,11 @@ function markSent(eventId, messageType) {
   persist();
 }
 
-module.exports = { wasAlreadySent, markSent };
+// Force the 60-day cleanup (normally runs on every write)
+function pruneOldEntries() {
+  const before = Object.keys(store).length;
+  persist();
+  return before - Object.keys(store).length;
+}
+
+module.exports = { wasAlreadySent, markSent, pruneOldEntries };
