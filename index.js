@@ -68,75 +68,31 @@ async function runJob_24hReminders() {
   finally { runningJobs.delete('24h_reminders'); }
 }
 
-async function runJob_aftercare() {
-  if (runningJobs.has('aftercare')) { log('⚠️  Aftercare already running — skipping'); return false; }
-  runningJobs.add('aftercare');
-  if (!process.env.TEMPLATE_SID_AFTERCARE) { runningJobs.delete('aftercare'); markJobCompleted('aftercare'); return true; }
-  log('⏰ Running: aftercare messages...');
-  try {
-    const sessions = await getTodaySessions();
-    for (const session of sessions) {
-      if (wasAlreadySent(session.id, 'aftercare')) {
-        log(`   Skipping ${session.fullName} — aftercare already sent`);
-        continue;
-      }
-      const msg = messages.aftercare(session.firstName);
-      const result = await sendToClient(session.phone, msg.templateSid, msg.variables);
-      if (result.success) { markSent(session.id, 'aftercare'); log(`📨 Aftercare sent → ${session.fullName}`); }
-      else log(`⚠️ Aftercare FAILED for ${session.fullName}: ${result.error}`);
-    }
-    if (sessions.length === 0) log('   No sessions today.');
-    markJobCompleted('aftercare');
-    return true;
-  } catch (e) { log(`❌ Job failed: ${e.message}`); return false; }
-  finally { runningJobs.delete('aftercare'); }
-}
-
-async function runJob_dayThree() {
-  if (runningJobs.has('day_three')) { log('⚠️  Day-3 check-ins already running — skipping'); return false; }
+async function runJob_dayThreeAftercare() {
+  if (runningJobs.has('day_three')) { log('⚠️  Day-3 aftercare already running — skipping'); return false; }
   runningJobs.add('day_three');
-  log('⏰ Running: day-3 check-ins...');
+  if (!process.env.TEMPLATE_SID_AFTERCARE) { runningJobs.delete('day_three'); markJobCompleted('day_three'); return true; }
+  log('⏰ Running: day-3 aftercare messages...');
   try {
     const sessions = await getSessionsFromDaysAgo(3);
     for (const session of sessions) {
       if (wasAlreadySent(session.id, 'day_three')) {
-        log(`   Skipping ${session.fullName} — day-3 check-in already sent`);
+        log(`   Skipping ${session.fullName} — day-3 aftercare already sent`);
         continue;
       }
-      const msg = messages.dayThree(session.firstName);
+      const msg = messages.aftercare(session.firstName);
       const result = await sendToClient(session.phone, msg.templateSid, msg.variables);
-      if (result.success) { markSent(session.id, 'day_three'); log(`📨 Day-3 check-in sent → ${session.fullName}`); }
-      else log(`⚠️ Day-3 check-in FAILED for ${session.fullName}: ${result.error}`);
+      if (result.success) {
+        markSent(session.id, 'day_three');
+        markAwaitingDay7(session.phone, session.firstName, session.fullName);
+        log(`📨 Day-3 aftercare sent → ${session.fullName} (awaiting reply)`);
+      } else log(`⚠️ Day-3 aftercare FAILED for ${session.fullName}: ${result.error}`);
     }
+    if (sessions.length === 0) log('   No sessions 3 days ago.');
     markJobCompleted('day_three');
     return true;
   } catch (e) { log(`❌ Job failed: ${e.message}`); return false; }
   finally { runningJobs.delete('day_three'); }
-}
-
-async function runJob_day7HealingCheck() {
-  if (runningJobs.has('day_seven')) { log('⚠️  Day-7 check-ins already running — skipping'); return false; }
-  runningJobs.add('day_seven');
-  log('⏰ Running: 7-day healing check-ins...');
-  try {
-    const sessions = await getSessionsFromDaysAgo(7);
-    for (const session of sessions) {
-      if (wasAlreadySent(session.id, 'day_seven')) {
-        log(`   Skipping ${session.fullName} — day-7 check-in already sent`);
-        continue;
-      }
-      const msg = messages.healingCheckIn(session.firstName, '');
-      const result = await sendToClient(session.phone, msg.templateSid, msg.variables);
-      if (result.success) {
-        markSent(session.id, 'day_seven');
-        markAwaitingDay7(session.phone, session.firstName, session.fullName);
-        log(`📨 7-day check-in sent → ${session.fullName} (awaiting reply)`);
-      } else log(`⚠️ Day-7 check-in FAILED for ${session.fullName}: ${result.error}`);
-    }
-    markJobCompleted('day_seven');
-    return true;
-  } catch (e) { log(`❌ Job failed: ${e.message}`); return false; }
-  finally { runningJobs.delete('day_seven'); }
 }
 
 async function runJob_smartReviewDispatcher() {
@@ -174,20 +130,8 @@ async function runHealthCheck() {
       await runJob_24hReminders();
     }
     if (!hasJobRunToday('day_three')) {
-      log('🩺 Health-check: day-3 check-ins missed today — running now');
-      await runJob_dayThree();
-    }
-    if (!hasJobRunToday('day_seven')) {
-      log('🩺 Health-check: day-7 check-ins missed today — running now');
-      await runJob_day7HealingCheck();
-    }
-  }
-
-  // Evening job (scheduled for 18:00) — check if missed and we're now after 18:00
-  if (hour >= 18) {
-    if (!hasJobRunToday('aftercare')) {
-      log('🩺 Health-check: aftercare missed today — running now');
-      await runJob_aftercare();
+      log('🩺 Health-check: day-3 aftercare missed today — running now');
+      await runJob_dayThreeAftercare();
     }
   }
 
@@ -200,12 +144,8 @@ async function runHealthCheck() {
 // ════════════════════════════════════════════════════════════════════════════
 
 // Morning batch at 09:00
-cron.schedule('0 9 * * *', runJob_24hReminders, { timezone: 'Asia/Jerusalem' });
-cron.schedule('0 9 * * *', runJob_dayThree,    { timezone: 'Asia/Jerusalem' });
-cron.schedule('0 9 * * *', runJob_day7HealingCheck, { timezone: 'Asia/Jerusalem' });
-
-// Evening at 18:00
-cron.schedule('0 18 * * *', runJob_aftercare, { timezone: 'Asia/Jerusalem' });
+cron.schedule('0 9 * * *', runJob_24hReminders,      { timezone: 'Asia/Jerusalem' });
+cron.schedule('0 9 * * *', runJob_dayThreeAftercare, { timezone: 'Asia/Jerusalem' });
 
 // Smart review dispatcher — every hour
 cron.schedule('0 * * * *', runJob_smartReviewDispatcher, { timezone: 'Asia/Jerusalem' });
@@ -222,9 +162,7 @@ cron.schedule('0 */6 * * *', refreshClientPhoneMap, { timezone: 'Asia/Jerusalem'
 
 module.exports = {
   runJob_24hReminders,
-  runJob_aftercare,
-  runJob_dayThree,
-  runJob_day7HealingCheck,
+  runJob_dayThreeAftercare,
   runJob_smartReviewDispatcher,
   runHealthCheck,
 };
@@ -238,8 +176,7 @@ module.exports = {
   startServer();
   log('');
   log('   Scheduled jobs:');
-  log('   • 09:00 → 24h reminders, day-3 check-ins, day-7 healing check-ins');
-  log('   • 18:00 → Aftercare messages');
+  log('   • 09:00 → 24h reminders, day-3 aftercare (tracks reply → review request)');
   log('   • Hourly → Smart review dispatcher');
   log('   • Every 30 min → Health-check (recovers missed jobs)');
   log('   • Every 6 hours → Refresh client phone map');

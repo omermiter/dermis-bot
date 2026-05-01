@@ -273,23 +273,13 @@ const TEMPLATE_INFO = {
     placeholders: ['{name}', '{time}'],
   },
   aftercare: {
-    label: 'Same-day Aftercare',
-    desc: 'Sent to clients in the evening after their session.',
+    label: 'Day-3 Aftercare',
+    desc: 'Sent 3 days after the session. Client reply triggers the smart review logic.',
     placeholders: ['{name}'],
-  },
-  dayThree: {
-    label: 'Day 3 Check-in',
-    desc: 'Sent 3 days after the session.',
-    placeholders: ['{name}'],
-  },
-  healingCheckIn: {
-    label: 'Day 7 Healing Check-in',
-    desc: 'Sent 7 days after the session. Their reply triggers the smart review logic.',
-    placeholders: ['{name}', '{sessionNum}'],
   },
   reviewRequest: {
     label: 'Review Request',
-    desc: 'Sent automatically the day after a positive day-7 reply.',
+    desc: 'Sent automatically after a positive aftercare reply.',
     placeholders: ['{name}'],
   },
 };
@@ -513,9 +503,7 @@ app.get('/status', requireAuth, (req, res) => {
   const today = getTodayStatus();
   const jobs = [
     { key: '24h_reminders', label: '24h Reminders', expected: '09:00' },
-    { key: 'day_three',     label: 'Day-3 Check-ins', expected: '09:00' },
-    { key: 'day_seven',     label: 'Day-7 Healing Check-ins', expected: '09:00' },
-    { key: 'aftercare',     label: 'Aftercare Messages', expected: '18:00' },
+    { key: 'day_three',     label: 'Day-3 Aftercare', expected: '09:00' },
   ];
 
   const israelHour = parseInt(new Date().toLocaleString('en-US', { timeZone: 'Asia/Jerusalem', hour: '2-digit', hour12: false }));
@@ -566,18 +554,16 @@ app.get('/status', requireAuth, (req, res) => {
       <div class="card-title">📊 Today's job status</div>
       ${rows}
       <div class="info" style="margin-top:16px;">
-        🩺 A health-check runs every <strong>30 minutes</strong> and automatically re-runs any job that was missed (e.g. due to server downtime). You shouldn't have to do anything.
+        🩺 A health-check runs every <strong>30 minutes</strong> and automatically re-runs any job that was missed (e.g. due to server downtime). The day-3 aftercare message tracks client replies — a positive reply schedules a review request automatically.
       </div>
     </div>
 
     <div class="card">
       <div class="card-title">📋 Meta template registration</div>
       ${[
-        ['TEMPLATE_SID_REMINDER',         '24h Reminder'],
-        ['TEMPLATE_SID_AFTERCARE',        'Aftercare'],
-        ['TEMPLATE_SID_DAY_THREE',        'Day 3 Check-in'],
-        ['TEMPLATE_SID_HEALING_CHECKIN',  'Day 7 Healing Check-in'],
-        ['TEMPLATE_SID_REVIEW_REQUEST',   'Review Request'],
+        ['TEMPLATE_SID_REMINDER',       '24h Reminder'],
+        ['TEMPLATE_SID_AFTERCARE',      'Day-3 Aftercare'],
+        ['TEMPLATE_SID_REVIEW_REQUEST', 'Review Request'],
       ].map(([env, label]) => {
         const v = process.env[env];
         const status = v
