@@ -68,25 +68,49 @@ async function runJob_24hReminders() {
   finally { runningJobs.delete('24h_reminders'); }
 }
 
-async function runJob_dayThreeAftercare() {
-  if (runningJobs.has('day_three')) { log('⚠️  Day-3 aftercare already running — skipping'); return false; }
-  runningJobs.add('day_three');
-  if (!process.env.TEMPLATE_SID_AFTERCARE) { runningJobs.delete('day_three'); markJobCompleted('day_three'); return true; }
-  log('⏰ Running: day-3 aftercare messages...');
+async function runJob_aftercare() {
+  if (runningJobs.has('aftercare')) { log('⚠️  Aftercare already running — skipping'); return false; }
+  runningJobs.add('aftercare');
+  if (!process.env.TEMPLATE_SID_AFTERCARE) { runningJobs.delete('aftercare'); markJobCompleted('aftercare'); return true; }
+  log('⏰ Running: same-day aftercare instructions...');
   try {
-    const sessions = await getSessionsFromDaysAgo(3);
+    const sessions = await getTodaySessions();
     for (const session of sessions) {
-      if (wasAlreadySent(session.id, 'day_three')) {
-        log(`   Skipping ${session.fullName} — day-3 aftercare already sent`);
+      if (wasAlreadySent(session.id, 'aftercare')) {
+        log(`   Skipping ${session.fullName} — aftercare already sent`);
         continue;
       }
       const msg = messages.aftercare(session.firstName);
       const result = await sendToClient(session.phone, msg.templateSid, msg.variables);
+      if (result.success) { markSent(session.id, 'aftercare'); log(`📨 Aftercare sent → ${session.fullName}`); }
+      else log(`⚠️ Aftercare FAILED for ${session.fullName}: ${result.error}`);
+    }
+    if (sessions.length === 0) log('   No sessions today.');
+    markJobCompleted('aftercare');
+    return true;
+  } catch (e) { log(`❌ Job failed: ${e.message}`); return false; }
+  finally { runningJobs.delete('aftercare'); }
+}
+
+async function runJob_dayThreeAftercare() {
+  if (runningJobs.has('day_three')) { log('⚠️  Day-3 check already running — skipping'); return false; }
+  runningJobs.add('day_three');
+  if (!process.env.TEMPLATE_SID_HEALING_CHECKIN) { runningJobs.delete('day_three'); markJobCompleted('day_three'); return true; }
+  log('⏰ Running: day-3 healing check...');
+  try {
+    const sessions = await getSessionsFromDaysAgo(3);
+    for (const session of sessions) {
+      if (wasAlreadySent(session.id, 'day_three')) {
+        log(`   Skipping ${session.fullName} — day-3 check already sent`);
+        continue;
+      }
+      const msg = messages.healingCheckIn(session.firstName, '');
+      const result = await sendToClient(session.phone, msg.templateSid, msg.variables);
       if (result.success) {
         markSent(session.id, 'day_three');
         markAwaitingDay7(session.phone, session.firstName, session.fullName);
-        log(`📨 Day-3 aftercare sent → ${session.fullName} (awaiting reply)`);
-      } else log(`⚠️ Day-3 aftercare FAILED for ${session.fullName}: ${result.error}`);
+        log(`📨 Day-3 check sent → ${session.fullName} (awaiting reply)`);
+      } else log(`⚠️ Day-3 check FAILED for ${session.fullName}: ${result.error}`);
     }
     if (sessions.length === 0) log('   No sessions 3 days ago.');
     markJobCompleted('day_three');
@@ -123,15 +147,23 @@ async function runHealthCheck() {
   const israelTime = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Jerusalem' }));
   const hour = israelTime.getHours();
 
-  // Morning jobs (scheduled for 09:00) — check if missed and we're now after 09:00
+  // Morning jobs (scheduled for 09:00)
   if (hour >= 9) {
     if (!hasJobRunToday('24h_reminders')) {
       log('🩺 Health-check: 24h reminders missed today — running now');
       await runJob_24hReminders();
     }
     if (!hasJobRunToday('day_three')) {
-      log('🩺 Health-check: day-3 aftercare missed today — running now');
+      log('🩺 Health-check: day-3 check missed today — running now');
       await runJob_dayThreeAftercare();
+    }
+  }
+
+  // Evening job (scheduled for 18:00)
+  if (hour >= 18) {
+    if (!hasJobRunToday('aftercare')) {
+      log('🩺 Health-check: aftercare missed today — running now');
+      await runJob_aftercare();
     }
   }
 
@@ -146,6 +178,9 @@ async function runHealthCheck() {
 // Morning batch at 09:00
 cron.schedule('0 9 * * *', runJob_24hReminders,      { timezone: 'Asia/Jerusalem' });
 cron.schedule('0 9 * * *', runJob_dayThreeAftercare, { timezone: 'Asia/Jerusalem' });
+
+// Evening at 18:00
+cron.schedule('0 18 * * *', runJob_aftercare, { timezone: 'Asia/Jerusalem' });
 
 // Smart review dispatcher — every hour
 cron.schedule('0 * * * *', runJob_smartReviewDispatcher, { timezone: 'Asia/Jerusalem' });
@@ -162,6 +197,7 @@ cron.schedule('0 */6 * * *', refreshClientPhoneMap, { timezone: 'Asia/Jerusalem'
 
 module.exports = {
   runJob_24hReminders,
+  runJob_aftercare,
   runJob_dayThreeAftercare,
   runJob_smartReviewDispatcher,
   runHealthCheck,
@@ -176,7 +212,8 @@ module.exports = {
   startServer();
   log('');
   log('   Scheduled jobs:');
-  log('   • 09:00 → 24h reminders, day-3 aftercare (tracks reply → review request)');
+  log('   • 09:00 → 24h reminders, day-3 healing check (tracks reply → review request)');
+  log('   • 18:00 → Same-day aftercare instructions');
   log('   • Hourly → Smart review dispatcher');
   log('   • Every 30 min → Health-check (recovers missed jobs)');
   log('   • Every 6 hours → Refresh client phone map');

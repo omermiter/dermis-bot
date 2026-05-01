@@ -273,13 +273,18 @@ const TEMPLATE_INFO = {
     placeholders: ['{name}', '{time}'],
   },
   aftercare: {
-    label: 'Day-3 Aftercare',
+    label: 'Same-day Aftercare Instructions',
+    desc: 'Sent the evening of the session with care instructions.',
+    placeholders: ['{name}'],
+  },
+  healingCheckIn: {
+    label: 'Day-3 Healing Check',
     desc: 'Sent 3 days after the session. Client reply triggers the smart review logic.',
     placeholders: ['{name}'],
   },
   reviewRequest: {
     label: 'Review Request',
-    desc: 'Sent automatically after a positive aftercare reply.',
+    desc: 'Sent automatically after a positive day-3 reply.',
     placeholders: ['{name}'],
   },
 };
@@ -502,8 +507,9 @@ const { getTodayStatus } = require('./job-state');
 app.get('/status', requireAuth, (req, res) => {
   const today = getTodayStatus();
   const jobs = [
-    { key: '24h_reminders', label: '24h Reminders', expected: '09:00' },
-    { key: 'day_three',     label: 'Day-3 Aftercare', expected: '09:00' },
+    { key: '24h_reminders', label: '24h Reminders',           expected: '09:00' },
+    { key: 'day_three',     label: 'Day-3 Healing Check',     expected: '09:00' },
+    { key: 'aftercare',     label: 'Same-day Aftercare',      expected: '18:00' },
   ];
 
   const israelHour = parseInt(new Date().toLocaleString('en-US', { timeZone: 'Asia/Jerusalem', hour: '2-digit', hour12: false }));
@@ -554,16 +560,17 @@ app.get('/status', requireAuth, (req, res) => {
       <div class="card-title">📊 Today's job status</div>
       ${rows}
       <div class="info" style="margin-top:16px;">
-        🩺 A health-check runs every <strong>30 minutes</strong> and automatically re-runs any job that was missed (e.g. due to server downtime). The day-3 aftercare message tracks client replies — a positive reply schedules a review request automatically.
+        🩺 A health-check runs every <strong>30 minutes</strong> and automatically re-runs any missed job. The day-3 healing check tracks client replies — a positive reply schedules a review request automatically.
       </div>
     </div>
 
     <div class="card">
       <div class="card-title">📋 Meta template registration</div>
       ${[
-        ['TEMPLATE_SID_REMINDER',       '24h Reminder'],
-        ['TEMPLATE_SID_AFTERCARE',      'Day-3 Aftercare'],
-        ['TEMPLATE_SID_REVIEW_REQUEST', 'Review Request'],
+        ['TEMPLATE_SID_REMINDER',        '24h Reminder'],
+        ['TEMPLATE_SID_AFTERCARE',       'Same-day Aftercare'],
+        ['TEMPLATE_SID_HEALING_CHECKIN', 'Day-3 Healing Check'],
+        ['TEMPLATE_SID_REVIEW_REQUEST',  'Review Request'],
       ].map(([env, label]) => {
         const v = process.env[env];
         const status = v
