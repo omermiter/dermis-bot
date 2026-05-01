@@ -16,6 +16,7 @@ const { analyze } = require('./sentiment');
 const pendingReviews = require('./pending-reviews');
 const messages = require('./messages');
 const { createSession, destroySession, checkPassword, requireAuth } = require('./auth');
+const { sendToArtistTemplate } = require('./whatsapp');
 
 const app = express();
 app.use(express.urlencoded({ extended: false }));
@@ -107,6 +108,11 @@ app.post('/webhook', async (req, res) => {
   const reply = addReply({ from, clientName, body, messageSid });
   if (!reply) return res.set('Content-Type', 'text/xml').send('<Response></Response>'); // duplicate webhook
   console.log(`📩 Reply from ${clientName} (${rawPhone}): "${body}"`);
+
+  if (process.env.TEMPLATE_SID_ARTIST_NOTIFICATION) {
+    const msg = messages.artistNotification(clientName, rawPhone, body);
+    sendToArtistTemplate(msg.templateSid, msg.variables).catch(() => {});
+  }
 
   const day7Data = awaitingDay7Reply.get(from);
   if (day7Data) {
@@ -289,6 +295,11 @@ const TEMPLATE_INFO = {
     label: 'Review Request',
     desc: 'Sent automatically after a positive day-3 reply.',
     placeholders: ['{name}'],
+  },
+  artistNotification: {
+    label: 'Artist Reply Notification',
+    desc: 'Sent to you when a client replies. You receive this on your personal number.',
+    placeholders: ['{name}', '{phone}', '{message}'],
   },
 };
 
@@ -570,10 +581,11 @@ app.get('/status', requireAuth, (req, res) => {
     <div class="card">
       <div class="card-title">📋 Meta template registration</div>
       ${[
-        ['TEMPLATE_SID_REMINDER',        '24h Reminder'],
-        ['TEMPLATE_SID_AFTERCARE',       'Same-day Aftercare'],
-        ['TEMPLATE_SID_HEALING_CHECKIN', 'Day-3 Healing Check'],
-        ['TEMPLATE_SID_REVIEW_REQUEST',  'Review Request'],
+        ['TEMPLATE_SID_REMINDER',             '24h Reminder'],
+        ['TEMPLATE_SID_AFTERCARE',            'Same-day Aftercare'],
+        ['TEMPLATE_SID_HEALING_CHECKIN',      'Day-3 Healing Check'],
+        ['TEMPLATE_SID_REVIEW_REQUEST',       'Review Request'],
+        ['TEMPLATE_SID_ARTIST_NOTIFICATION',  'Artist Reply Notification'],
       ].map(([env, label]) => {
         const v = process.env[env];
         const status = v

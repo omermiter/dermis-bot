@@ -91,6 +91,15 @@ module.exports = {
     };
   },
 
+  artistNotification: (name, phone, message) => {
+    const t = loadTemplates();
+    return {
+      body: fill(t.artistNotification || '{name} ({phone}): {message}', { name, phone, message }),
+      templateSid: process.env.TEMPLATE_SID_ARTIST_NOTIFICATION,
+      variables: { 1: name, 2: phone, 3: message },
+    };
+  },
+
   // Editor helpers
   getTemplates,
   saveTemplates,

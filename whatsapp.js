@@ -70,4 +70,9 @@ async function sendToArtist(body) {
   return sendFreeformMessage(process.env.YOUR_WHATSAPP_NUMBER, body);
 }
 
-module.exports = { sendToClient, sendToArtist, sendTemplateMessage, sendFreeformMessage };
+// ─── Send to YOURSELF using an approved template (works anytime, no 24h restriction) ───
+async function sendToArtistTemplate(templateSid, variables = {}) {
+  return sendTemplateMessage(process.env.YOUR_WHATSAPP_NUMBER, templateSid, variables);
+}
+
+module.exports = { sendToClient, sendToArtist, sendToArtistTemplate, sendTemplateMessage, sendFreeformMessage };
