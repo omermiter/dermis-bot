@@ -210,7 +210,10 @@ app.get('/inbox', requireAuth, (req, res) => {
           <span class="reply-time">${time}</span>
           ${!r.read ? '<span class="dot"></span>' : ''}
         </div>
-        <div class="reply-phone">${escHtml(r.from.replace('whatsapp:', ''))}</div>
+        <div class="reply-phone">
+          ${escHtml(r.from.replace('whatsapp:', ''))}
+          ${r.messageSid ? `<a href="https://console.twilio.com/us1/monitor/logs/sms/${escHtml(r.messageSid)}" target="_blank" onclick="event.stopPropagation()" style="margin-left:8px;font-size:11px;color:#888;text-decoration:underline;">View in Twilio ↗</a>` : ''}
+        </div>
         <div class="reply-body">${escHtml(r.body)}</div>
       </div>`;
   }).join('');
