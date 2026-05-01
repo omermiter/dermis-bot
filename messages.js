@@ -93,10 +93,11 @@ module.exports = {
 
   artistNotification: (name, phone, message) => {
     const t = loadTemplates();
+    const cleanMessage = (message || '').replace(/\n/g, ' ').replace(/\r/g, '').slice(0, 800);
     return {
-      body: fill(t.artistNotification || '{name} ({phone}): {message}', { name, phone, message }),
+      body: fill(t.artistNotification || '{name} ({phone}): {message}', { name, phone, message: cleanMessage }),
       templateSid: process.env.TEMPLATE_SID_ARTIST_NOTIFICATION,
-      variables: { 1: name, 2: phone, 3: message },
+      variables: { 1: name || 'Unknown', 2: phone || '', 3: cleanMessage },
     };
   },
 

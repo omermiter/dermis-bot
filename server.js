@@ -112,8 +112,8 @@ app.post('/webhook', async (req, res) => {
   if (process.env.TEMPLATE_SID_ARTIST_NOTIFICATION) {
     const msg = messages.artistNotification(clientName, rawPhone, body);
     sendToArtistTemplate(msg.templateSid, msg.variables)
-      .then(r => console.log(r.success ? `🔔 Artist notified` : `⚠️ Artist notification failed: ${r.error}`))
-      .catch(e => console.error(`⚠️ Artist notification error: ${e.message}`));
+      .then(r => console.log(r.success ? `🔔 Artist notified` : `⚠️ Artist notification failed: ${r.error} (code: ${r.code})`))
+      .catch(e => console.error(`⚠️ Artist notification error: ${e.message} (code: ${e.code})`));
   } else {
     console.log('⚠️ TEMPLATE_SID_ARTIST_NOTIFICATION not set — skipping artist notification');
   }
