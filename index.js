@@ -36,7 +36,14 @@ async function refreshClientPhoneMap() {
 // Each returns true if it ran successfully (even if 0 messages sent)
 // ════════════════════════════════════════════════════════════════════════════
 
+// Prevents two instances of the same job running concurrently (e.g. cron + health-check
+// firing at the same minute — both async, health-check can start a job before cron's
+// markJobCompleted/markSent calls resolve, causing duplicate sends).
+const runningJobs = new Set();
+
 async function runJob_24hReminders() {
+  if (runningJobs.has('24h_reminders')) { log('⚠️  24h reminders already running — skipping'); return false; }
+  runningJobs.add('24h_reminders');
   log('⏰ Running: 24h session reminders...');
   try {
     const sessions = await getTomorrowSessions();
@@ -58,10 +65,13 @@ async function runJob_24hReminders() {
     markJobCompleted('24h_reminders');
     return true;
   } catch (e) { log(`❌ Job failed: ${e.message}`); return false; }
+  finally { runningJobs.delete('24h_reminders'); }
 }
 
 async function runJob_aftercare() {
-  if (!process.env.TEMPLATE_SID_AFTERCARE) { markJobCompleted('aftercare'); return true; }
+  if (runningJobs.has('aftercare')) { log('⚠️  Aftercare already running — skipping'); return false; }
+  runningJobs.add('aftercare');
+  if (!process.env.TEMPLATE_SID_AFTERCARE) { runningJobs.delete('aftercare'); markJobCompleted('aftercare'); return true; }
   log('⏰ Running: aftercare messages...');
   try {
     const sessions = await getTodaySessions();
@@ -79,9 +89,12 @@ async function runJob_aftercare() {
     markJobCompleted('aftercare');
     return true;
   } catch (e) { log(`❌ Job failed: ${e.message}`); return false; }
+  finally { runningJobs.delete('aftercare'); }
 }
 
 async function runJob_dayThree() {
+  if (runningJobs.has('day_three')) { log('⚠️  Day-3 check-ins already running — skipping'); return false; }
+  runningJobs.add('day_three');
   log('⏰ Running: day-3 check-ins...');
   try {
     const sessions = await getSessionsFromDaysAgo(3);
@@ -98,9 +111,12 @@ async function runJob_dayThree() {
     markJobCompleted('day_three');
     return true;
   } catch (e) { log(`❌ Job failed: ${e.message}`); return false; }
+  finally { runningJobs.delete('day_three'); }
 }
 
 async function runJob_day7HealingCheck() {
+  if (runningJobs.has('day_seven')) { log('⚠️  Day-7 check-ins already running — skipping'); return false; }
+  runningJobs.add('day_seven');
   log('⏰ Running: 7-day healing check-ins...');
   try {
     const sessions = await getSessionsFromDaysAgo(7);
@@ -109,9 +125,7 @@ async function runJob_day7HealingCheck() {
         log(`   Skipping ${session.fullName} — day-7 check-in already sent`);
         continue;
       }
-      const parts = session.title.split('_');
-      const sessionNum = parts.length > 3 ? `#${parts[3]}` : '';
-      const msg = messages.healingCheckIn(session.firstName, sessionNum);
+      const msg = messages.healingCheckIn(session.firstName, '');
       const result = await sendToClient(session.phone, msg.templateSid, msg.variables);
       if (result.success) {
         markSent(session.id, 'day_seven');
@@ -122,6 +136,7 @@ async function runJob_day7HealingCheck() {
     markJobCompleted('day_seven');
     return true;
   } catch (e) { log(`❌ Job failed: ${e.message}`); return false; }
+  finally { runningJobs.delete('day_seven'); }
 }
 
 async function runJob_smartReviewDispatcher() {
