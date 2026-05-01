@@ -32,8 +32,8 @@ async function sendTemplateMessage(to, templateSid, variables = {}) {
     console.log(`✅ Template message sent to ${to} — SID: ${message.sid}`);
     return { success: true, sid: message.sid };
   } catch (err) {
-    console.error(`❌ Failed to send template to ${to}:`, err.message);
-    return { success: false, error: err.message };
+    console.error(`❌ Failed to send template to ${to}: [${err.code}] ${err.message}`, err.moreInfo || '');
+    return { success: false, error: err.message, code: err.code };
   }
 }
 
