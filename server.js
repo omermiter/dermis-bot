@@ -56,6 +56,7 @@ function escHtml(str) {
 // ─── Design tokens + Shared CSS ──────────────────────────────────────────────
 const SHARED_CSS = `
 *{box-sizing:border-box;margin:0;padding:0;}
+html{scroll-behavior:smooth;}
 :root{
   --bg:#080808;--surface:#111;--surface2:#161616;
   --border:#1f1f1f;--border2:#2a2a2a;
@@ -64,28 +65,44 @@ const SHARED_CSS = `
   --success:#22c55e;--success-bg:rgba(34,197,94,0.08);
   --warn:#f59e0b;--warn-bg:rgba(245,158,11,0.08);
   --error:#ef4444;--error-bg:rgba(239,68,68,0.08);
+  --ease:cubic-bezier(0.16,1,0.3,1);
 }
+@keyframes fadeUp{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:translateY(0)}}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+@keyframes slideDown{from{opacity:0;transform:translateY(-10px)}to{opacity:1;transform:translateY(0)}}
+@keyframes slideUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+@keyframes shimmer{0%{background-position:-400px 0}100%{background-position:400px 0}}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(.75)}}
+@keyframes glow{0%,100%{box-shadow:0 0 12px rgba(124,58,237,.3)}50%{box-shadow:0 0 24px rgba(124,58,237,.6)}}
+@keyframes popIn{0%{opacity:0;transform:scale(.92)}60%{transform:scale(1.03)}100%{opacity:1;transform:scale(1)}}
 body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Segoe UI',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;}
-.header{background:rgba(8,8,8,0.96);border-bottom:1px solid var(--border);padding:16px 20px;position:sticky;top:0;z-index:100;backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);}
+.header{background:rgba(8,8,8,0.96);border-bottom:1px solid var(--border);padding:16px 20px;position:sticky;top:0;z-index:100;backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);animation:slideDown .4s var(--ease) both;}
 .header-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
 .header-title{font-size:20px;font-weight:700;letter-spacing:4px;color:var(--text);}
 .header-sub{font-size:10px;color:var(--accent-light);letter-spacing:2px;text-transform:uppercase;margin-top:3px;font-weight:500;}
-.logout{font-size:12px;color:var(--text3);text-decoration:none;padding:6px 12px;border:1px solid var(--border2);border-radius:8px;transition:all .2s;font-weight:500;}
+.logout{font-size:12px;color:var(--text3);text-decoration:none;padding:6px 12px;border:1px solid var(--border2);border-radius:8px;transition:all .2s var(--ease);font-weight:500;}
 .logout:hover{color:var(--text);border-color:var(--text3);}
 .nav{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none;-ms-overflow-style:none;}
 .nav::-webkit-scrollbar{display:none;}
-.nav a{padding:7px 14px;font-size:12px;font-weight:500;color:var(--text2);text-decoration:none;border-radius:8px;white-space:nowrap;transition:all .2s;letter-spacing:.2px;}
-.nav a.active{background:var(--accent);color:#fff;}
+.nav a{padding:7px 14px;font-size:12px;font-weight:500;color:var(--text2);text-decoration:none;border-radius:8px;white-space:nowrap;transition:all .25s var(--ease);letter-spacing:.2px;}
+.nav a.active{background:var(--accent);color:#fff;box-shadow:0 0 16px rgba(124,58,237,.35);}
 .nav a:hover:not(.active){color:var(--text);background:var(--surface2);}
 .container{padding:16px 16px 100px;max-width:600px;margin:0 auto;}
-.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:10px 16px;background:var(--surface2);color:var(--text);border:1px solid var(--border2);border-radius:10px;font-size:13px;font-weight:500;cursor:pointer;transition:all .2s;font-family:inherit;text-decoration:none;-webkit-tap-highlight-color:transparent;}
-.btn:hover{background:var(--border2);border-color:var(--text3);}
-.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff;}
-.btn.primary:hover{background:#6D28D9;border-color:#6D28D9;}
-.btn:disabled{opacity:.4;cursor:not-allowed;}
-.card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:20px;margin-bottom:12px;}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:10px 16px;background:var(--surface2);color:var(--text);border:1px solid var(--border2);border-radius:10px;font-size:13px;font-weight:500;cursor:pointer;transition:all .18s var(--ease);font-family:inherit;text-decoration:none;-webkit-tap-highlight-color:transparent;}
+.btn:hover{background:var(--border2);border-color:var(--text3);transform:translateY(-1px);}
+.btn:active:not(:disabled){transform:scale(.96) translateY(0);}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff;box-shadow:0 0 0 rgba(124,58,237,0);}
+.btn.primary:hover{background:#6D28D9;border-color:#6D28D9;box-shadow:0 4px 20px rgba(124,58,237,.4);}
+.btn:disabled{opacity:.4;cursor:not-allowed;transform:none;}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:20px;margin-bottom:12px;animation:fadeUp .5s var(--ease) both;transition:border-color .2s;}
+.card:nth-child(1){animation-delay:0ms}
+.card:nth-child(2){animation-delay:70ms}
+.card:nth-child(3){animation-delay:140ms}
+.card:nth-child(4){animation-delay:210ms}
+.card:nth-child(5){animation-delay:280ms}
+.card:nth-child(6){animation-delay:350ms}
 .card-title{font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:1px;margin-bottom:16px;}
-.job-row{display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid var(--border);gap:12px;}
+.job-row{display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid var(--border);gap:12px;transition:background .15s;}
 .job-row:last-child{border-bottom:none;}
 .job-label{font-size:13px;font-weight:500;color:var(--text);}
 .job-status{font-size:12px;color:var(--text2);}
@@ -93,6 +110,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Segoe UI',sans-
 .job-row.warn .job-status{color:var(--warn);}
 .job-row.pending .job-status{color:var(--text3);}
 .info{font-size:12px;color:var(--text2);line-height:1.6;padding:12px 14px;background:var(--surface2);border-radius:10px;margin-top:10px;border:1px solid var(--border);}
+.shimmer{background:linear-gradient(90deg,var(--surface) 25%,var(--surface2) 50%,var(--surface) 75%);background-size:400px 100%;animation:shimmer 1.5s ease-in-out infinite;border-radius:8px;color:transparent !important;pointer-events:none;}
 `;
 
 const HEAD_TAGS = `
@@ -103,12 +121,13 @@ const HEAD_TAGS = `
   <link rel="manifest" href="/manifest.json">`;
 
 const IOS_PWA_BANNER = `
-<div id="pwa-banner" style="display:none;position:fixed;bottom:0;left:0;right:0;background:#111;border-top:1px solid #7C3AED;padding:14px 20px;z-index:999;align-items:center;gap:14px;box-shadow:0 -8px 32px rgba(0,0,0,0.6);">
+<style>#pwa-banner{animation:slideUp .5s cubic-bezier(0.16,1,0.3,1) both;}</style>
+<div id="pwa-banner" style="display:none;position:fixed;bottom:0;left:0;right:0;background:#111;border-top:1px solid #7C3AED;padding:14px 20px;z-index:999;align-items:center;gap:14px;box-shadow:0 -8px 40px rgba(124,58,237,.2);">
   <div style="flex:1;">
     <div style="font-size:13px;font-weight:600;color:#f0f0f0;margin-bottom:3px;">Add to Home Screen</div>
     <div style="font-size:12px;color:#888;">Tap <strong style="color:#9B6DFF">Share ↑</strong> then <strong style="color:#9B6DFF">Add to Home Screen</strong></div>
   </div>
-  <button onclick="document.getElementById('pwa-banner').style.display='none';localStorage.setItem('pwa-off','1')" style="background:transparent;border:1px solid #333;color:#666;border-radius:8px;padding:7px 11px;font-size:13px;cursor:pointer;flex-shrink:0;">✕</button>
+  <button onclick="document.getElementById('pwa-banner').style.display='none';localStorage.setItem('pwa-off','1')" style="background:transparent;border:1px solid #333;color:#666;border-radius:8px;padding:7px 11px;font-size:13px;cursor:pointer;flex-shrink:0;transition:all .2s;">✕</button>
 </div>
 <script>(function(){var a=/iphone|ipad|ipod/i.test(navigator.userAgent);var b=window.navigator.standalone;var c=localStorage.getItem('pwa-off');if(a&&!b&&!c)document.getElementById('pwa-banner').style.display='flex';})();</script>`;
 
@@ -212,8 +231,11 @@ app.get('/login', (req, res) => {
     input[type="password"]:focus{outline:none;border-color:#7C3AED;}
     button{width:100%;padding:14px;background:#7C3AED;color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:600;cursor:pointer;margin-top:20px;font-family:inherit;letter-spacing:.4px;transition:background .2s;}
     button:hover{background:#6D28D9;}
-    button:active{background:#5B21B6;}
-    .error{background:rgba(239,68,68,.1);color:#ef4444;border:1px solid rgba(239,68,68,.2);padding:12px;border-radius:10px;font-size:12px;text-align:center;margin-bottom:20px;}
+    button:active{background:#5B21B6;transform:scale(.98);}
+    .error{background:rgba(239,68,68,.1);color:#ef4444;border:1px solid rgba(239,68,68,.2);padding:12px;border-radius:10px;font-size:12px;text-align:center;margin-bottom:20px;animation:slideDown .3s cubic-bezier(0.16,1,0.3,1);}
+    @keyframes fadeUp{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:translateY(0)}}
+    @keyframes slideDown{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
+    .card{animation:fadeUp .5s cubic-bezier(0.16,1,0.3,1) both;}
   </style>
 </head><body>
   <form class="card" method="POST" action="/login">
@@ -293,16 +315,18 @@ app.get('/inbox', requireAuth, (req, res) => {
     .badge.zero{background:var(--success);}
     .actions{padding:12px 0;display:flex;gap:8px;align-items:center;}
     .empty{text-align:center;padding:60px 20px;color:var(--text2);font-size:14px;}
-    .reply{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:14px 16px;margin-bottom:8px;border-left:3px solid transparent;cursor:pointer;transition:all .2s;}
+    .reply{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:14px 16px;margin-bottom:8px;border-left:3px solid transparent;cursor:pointer;transition:all .2s var(--ease);animation:fadeUp .4s var(--ease) both;}
     .reply.unread{border-left-color:var(--accent);}
-    .reply.read{opacity:.5;}
-    .reply:hover{border-color:var(--border2);background:var(--surface2);}
+    .reply.read{opacity:.45;}
+    .reply:hover{border-color:var(--border2);background:var(--surface2);transform:translateY(-1px);}
+    .reply:active{transform:scale(.99);}
     .reply-header{display:flex;align-items:center;gap:8px;margin-bottom:3px;}
     .client-name{font-size:14px;font-weight:600;color:var(--text);flex:1;}
     .reply-time{font-size:11px;color:var(--text3);}
-    .dot{width:7px;height:7px;border-radius:50%;background:var(--accent);flex-shrink:0;}
+    .dot{width:7px;height:7px;border-radius:50%;background:var(--accent);flex-shrink:0;animation:pulse 2s ease-in-out infinite;box-shadow:0 0 6px var(--accent);}
     .reply-phone{font-size:11px;color:var(--text2);margin-bottom:6px;}
     .reply-body{font-size:13px;color:var(--text2);line-height:1.5;background:var(--surface2);padding:10px 12px;border-radius:8px;white-space:pre-wrap;border:1px solid var(--border);}
+    .badge{animation:popIn .35s var(--ease) both;}
   </style>
 </head><body>
   ${HEADER('inbox')}
@@ -319,8 +343,12 @@ app.get('/inbox', requireAuth, (req, res) => {
     }
   </div>
   <script>
+    document.querySelectorAll('.reply').forEach((el, i) => {
+      el.style.animationDelay = (i * 50) + 'ms';
+    });
     function markRead(id, el) {
       fetch('/mark-read/' + id).then(() => {
+        el.style.transition = 'opacity .3s, transform .3s';
         el.classList.remove('unread'); el.classList.add('read');
         const dot = el.querySelector('.dot'); if (dot) dot.remove();
       });
@@ -390,7 +418,7 @@ app.get('/templates', requireAuth, (req, res) => {
   ${HEAD_TAGS}
   <style>
     ${SHARED_CSS}
-    .saved-toast{background:var(--success-bg);color:var(--success);border:1px solid rgba(34,197,94,.2);padding:12px 16px;border-radius:10px;font-size:13px;margin:12px 0;text-align:center;}
+    .saved-toast{background:var(--success-bg);color:var(--success);border:1px solid rgba(34,197,94,.2);padding:12px 16px;border-radius:10px;font-size:13px;margin:12px 0;text-align:center;animation:slideDown .4s var(--ease) both;}
     .card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:18px;margin-bottom:12px;}
     .card-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;}
     .tmpl-label{font-size:14px;font-weight:600;color:var(--text);}
@@ -484,8 +512,8 @@ app.get('/test', requireAuth, (req, res) => {
     select option{background:var(--surface);}
     .preview{background:#1a1033;border:1px solid rgba(124,58,237,.3);border-radius:14px 14px 0 14px;padding:14px 16px;font-size:13px;line-height:1.6;white-space:pre-wrap;margin-top:8px;max-width:95%;min-height:50px;color:var(--text);}
     .preview-label{font-size:11px;color:var(--text3);margin-top:14px;margin-bottom:6px;letter-spacing:.5px;}
-    .success-toast{background:var(--success-bg);color:var(--success);border:1px solid rgba(34,197,94,.2);padding:12px 16px;border-radius:10px;font-size:13px;margin:12px 0;text-align:center;}
-    .error-toast{background:var(--error-bg);color:var(--error);border:1px solid rgba(239,68,68,.2);padding:12px 16px;border-radius:10px;font-size:13px;margin:12px 0;text-align:center;}
+    .success-toast{background:var(--success-bg);color:var(--success);border:1px solid rgba(34,197,94,.2);padding:12px 16px;border-radius:10px;font-size:13px;margin:12px 0;text-align:center;animation:slideDown .4s var(--ease) both;}
+    .error-toast{background:var(--error-bg);color:var(--error);border:1px solid rgba(239,68,68,.2);padding:12px 16px;border-radius:10px;font-size:13px;margin:12px 0;text-align:center;animation:slideDown .4s var(--ease) both;}
     .info-row{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--text2);padding:12px 14px;background:var(--surface2);border-radius:10px;margin-bottom:14px;border:1px solid var(--border);}
     .info-row .icon{font-size:18px;}
   </style>
@@ -704,12 +732,12 @@ app.get('/schedule', requireAuth, (req, res) => {
 
     <div class="card">
       <div class="card-title">📅 This week — client sessions</div>
-      <div id="sessions-body"><span style="font-size:13px;color:#999;">Loading…</span></div>
+      <div id="sessions-body"><div class="shimmer" style="height:18px;margin-bottom:10px;"></div><div class="shimmer" style="height:18px;width:75%;"></div></div>
     </div>
 
     <div class="card">
       <div class="card-title">⏰ This week — personal reminders</div>
-      <div id="remind-body"><span style="font-size:13px;color:#999;">Loading…</span></div>
+      <div id="remind-body"><div class="shimmer" style="height:18px;margin-bottom:10px;"></div><div class="shimmer" style="height:18px;width:60%;"></div></div>
     </div>
 
     <button class="btn" style="width:100%;" onclick="location.reload()">↻ Refresh</button>
@@ -726,17 +754,17 @@ app.get('/schedule', requireAuth, (req, res) => {
           sbox.innerHTML = '<span style="font-size:13px;color:#999;">No sessions this week.</span>';
         } else {
           const labels = { reminder: '24h', aftercare: 'Aftercare', day_three: 'Day 3', day_seven: 'Day 7' };
-          sbox.innerHTML = data.sessions.map(s => {
+          sbox.innerHTML = data.sessions.map((s, i) => {
             const badges = Object.entries(labels).map(([key, label]) => {
               const sent = s.sent[key];
               if (sent) return \`<span style="font-size:11px;padding:2px 7px;border-radius:20px;background:rgba(34,197,94,.12);color:#22c55e;border:1px solid rgba(34,197,94,.25);">✅ \${label}</span>\`;
               const payload = JSON.stringify({ eventId: s.id, messageType: key, phone: s.phone, firstName: s.firstName, timeString: s.time });
               return \`<button onclick="sendManually(this,\${payload.replace(/"/g,'&quot;')})" style="font-size:11px;padding:2px 7px;border-radius:20px;background:#1f1f1f;color:#888;border:1px solid #2a2a2a;cursor:pointer;">⬜ \${label} ▶</button>\`;
             }).join(' ');
-            return \`<div class="job-row" style="flex-direction:column;align-items:flex-start;gap:6px;">
+            return \`<div class="job-row" style="flex-direction:column;align-items:flex-start;gap:6px;animation:fadeUp .4s var(--ease) both;animation-delay:\${i*60}ms;">
               <div style="display:flex;justify-content:space-between;width:100%;align-items:center;">
                 <div class="job-label" style="direction:rtl;">\${s.title}</div>
-                <div style="font-size:11px;color:#666;">\${s.date} · \${s.time}</div>
+                <div style="font-size:11px;color:var(--text3);">\${s.date} · \${s.time}</div>
               </div>
               <div style="display:flex;gap:4px;flex-wrap:wrap;">\${badges}</div>
             </div>\`;
@@ -753,7 +781,7 @@ app.get('/schedule', requireAuth, (req, res) => {
         else if (data.events.length === 0) {
           rbox.innerHTML = '<span style="font-size:13px;color:#999;">No reminder events this week.</span>';
         } else {
-          rbox.innerHTML = data.events.map(e => {
+          rbox.innerHTML = data.events.map((e, i) => {
             const sent_s = 'font-size:11px;padding:2px 7px;border-radius:20px;background:rgba(34,197,94,.12);color:#22c55e;border:1px solid rgba(34,197,94,.25);';
             const unsent_s = 'font-size:11px;padding:2px 7px;border-radius:20px;background:#1f1f1f;color:#555;border:1px solid #2a2a2a;';
             const dayBadge = e.sent.day_before
@@ -762,10 +790,10 @@ app.get('/schedule', requireAuth, (req, res) => {
             const minBadge = e.sent.thirty_min
               ? \`<span style="\${sent_s}">✅ 30 דקות</span>\`
               : \`<span style="\${unsent_s}">⬜ 30 דקות</span>\`;
-            return \`<div class="job-row" style="flex-direction:column;align-items:flex-start;gap:6px;">
+            return \`<div class="job-row" style="flex-direction:column;align-items:flex-start;gap:6px;animation:fadeUp .4s var(--ease) both;animation-delay:\${i*60}ms;">
               <div style="display:flex;justify-content:space-between;width:100%;align-items:center;">
                 <div class="job-label" style="direction:rtl;">\${e.title}</div>
-                <div style="font-size:11px;color:#666;">\${e.date} · \${e.time}</div>
+                <div style="font-size:11px;color:var(--text3);">\${e.date} · \${e.time}</div>
               </div>
               <div style="display:flex;gap:4px;">\${dayBadge} \${minBadge}</div>
             </div>\`;
