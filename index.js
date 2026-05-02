@@ -6,7 +6,7 @@ const cron = require('node-cron');
 const {
   getTodaySessions, getTomorrowSessions, getSessionsFromDaysAgo, getSessionsInRange, getPersonalReminderEvents
 } = require('./calendar');
-const { sendToClient, sendToArtist } = require('./whatsapp');
+const { sendToClient, sendToArtistTemplate } = require('./whatsapp');
 const messages = require('./messages');
 const { startServer, registerClientPhone, markAwaitingDay7 } = require('./server');
 const pendingReviews = require('./pending-reviews');
@@ -185,6 +185,17 @@ async function runHealthCheck() {
 // PERSONAL REMINDERS — for events with "remind" in the description
 // ════════════════════════════════════════════════════════════════════════════
 
+async function sendPersonalReminder(eventId, title, v2, sentKey, logLabel) {
+  if (!process.env.TEMPLATE_SID_PERSONAL_REMINDER) {
+    log('⚠️ TEMPLATE_SID_PERSONAL_REMINDER not set — skipping personal reminder');
+    return;
+  }
+  if (wasAlreadySent(eventId, sentKey)) return;
+  const result = await sendToArtistTemplate(process.env.TEMPLATE_SID_PERSONAL_REMINDER, { 1: title, 2: v2 });
+  if (result.success) { markSent(eventId, sentKey); log(`📅 ${logLabel}: ${title}`); }
+  else log(`⚠️ Personal reminder FAILED: ${result.error}`);
+}
+
 async function runJob_personalDayBeforeReminders() {
   try {
     const start = new Date();
@@ -194,12 +205,7 @@ async function runJob_personalDayBeforeReminders() {
     end.setHours(23, 59, 59, 999);
     const events = await getPersonalReminderEvents(start, end);
     for (const event of events) {
-      if (wasAlreadySent(event.id, 'personal_day_before')) continue;
-      const result = await sendToArtist(`⏰ תזכורת למחר: ${event.title}\nמחר ב-${event.timeString}`);
-      if (result.success) {
-        markSent(event.id, 'personal_day_before');
-        log(`📅 Personal day-before reminder sent: ${event.title}`);
-      } else log(`⚠️ Personal day-before reminder FAILED: ${result.error}`);
+      await sendPersonalReminder(event.id, event.title, `מחר ב-${event.timeString}`, 'personal_day_before', 'Day-before reminder sent');
     }
   } catch (e) { log(`❌ Personal day-before reminders error: ${e.message}`); }
 }
@@ -211,12 +217,7 @@ async function runJob_personal30MinReminders() {
     const to   = new Date(now.getTime() + 40 * 60 * 1000);
     const events = await getPersonalReminderEvents(from, to);
     for (const event of events) {
-      if (wasAlreadySent(event.id, 'personal_30min')) continue;
-      const result = await sendToArtist(`⏰ תזכורת: ${event.title}\nמתחיל ב-${event.timeString} (בעוד כ-30 דקות)`);
-      if (result.success) {
-        markSent(event.id, 'personal_30min');
-        log(`📅 Personal 30-min reminder sent: ${event.title}`);
-      } else log(`⚠️ Personal 30-min reminder FAILED: ${result.error}`);
+      await sendPersonalReminder(event.id, event.title, `בעוד כ-30 דקות, ב-${event.timeString}`, 'personal_30min', '30-min reminder sent');
     }
   } catch (e) { log(`❌ Personal 30-min reminders error: ${e.message}`); }
 }
