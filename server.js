@@ -53,13 +53,13 @@ const path = require('path');
 const DATA_DIR = process.env.DATA_DIR || '.';
 fs.mkdirSync(DATA_DIR, { recursive: true });
 const DEVICES_FILE = path.resolve(DATA_DIR, 'trusted-devices.json');
+const { encrypt, decrypt } = require('./encrypt');
 
 function loadDevices() {
   try {
     if (fs.existsSync(DEVICES_FILE)) {
-      const raw = JSON.parse(fs.readFileSync(DEVICES_FILE, 'utf8'));
+      const raw = JSON.parse(decrypt(fs.readFileSync(DEVICES_FILE, 'utf8')));
       const now = Date.now();
-      // Filter out expired tokens on load
       return new Map(Object.entries(raw).filter(([, exp]) => exp > now));
     }
   } catch (e) { console.warn('Could not load trusted devices:', e.message); }
@@ -67,7 +67,7 @@ function loadDevices() {
 }
 
 function persistDevices(map) {
-  try { fs.writeFileSync(DEVICES_FILE, JSON.stringify(Object.fromEntries(map), null, 2)); }
+  try { fs.writeFileSync(DEVICES_FILE, encrypt(JSON.stringify(Object.fromEntries(map)))); }
   catch (e) { console.warn('Could not save trusted devices:', e.message); }
 }
 

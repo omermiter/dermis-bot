@@ -2,6 +2,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { encrypt, decrypt } = require('./encrypt');
 
 const DATA_DIR = process.env.DATA_DIR || '.';
 fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -9,7 +10,7 @@ const STORE_FILE = path.resolve(DATA_DIR, 'passkeys.json');
 
 function load() {
   try {
-    if (fs.existsSync(STORE_FILE)) return JSON.parse(fs.readFileSync(STORE_FILE, 'utf8'));
+    if (fs.existsSync(STORE_FILE)) return JSON.parse(decrypt(fs.readFileSync(STORE_FILE, 'utf8')));
   } catch (e) { console.warn('Could not load passkeys:', e.message); }
   return [];
 }
@@ -17,7 +18,7 @@ function load() {
 let credentials = load();
 
 function persist() {
-  try { fs.writeFileSync(STORE_FILE, JSON.stringify(credentials, null, 2)); }
+  try { fs.writeFileSync(STORE_FILE, encrypt(JSON.stringify(credentials))); }
   catch (e) { console.warn('Could not save passkeys:', e.message); }
 }
 

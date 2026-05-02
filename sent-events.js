@@ -3,6 +3,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { encrypt, decrypt } = require('./encrypt');
 
 const DATA_DIR = process.env.DATA_DIR || '.';
 fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -11,7 +12,7 @@ const STORE_FILE = path.resolve(DATA_DIR, 'sent-events.json');
 function load() {
   try {
     if (fs.existsSync(STORE_FILE)) {
-      return JSON.parse(fs.readFileSync(STORE_FILE, 'utf8'));
+      return JSON.parse(decrypt(fs.readFileSync(STORE_FILE, 'utf8')));
     }
   } catch (e) { console.warn('Could not load sent-events:', e.message); }
   return {};
@@ -25,7 +26,7 @@ function persist() {
     for (const key of Object.keys(store)) {
       if (new Date(store[key]).getTime() < cutoff) delete store[key];
     }
-    fs.writeFileSync(STORE_FILE, JSON.stringify(store, null, 2));
+    fs.writeFileSync(STORE_FILE, encrypt(JSON.stringify(store)));
   } catch (e) { console.warn('Could not save sent-events:', e.message); }
 }
 

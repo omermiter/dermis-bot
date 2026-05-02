@@ -3,6 +3,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { encrypt, decrypt } = require('./encrypt');
 
 const DATA_DIR = process.env.DATA_DIR || '.';
 fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -11,7 +12,7 @@ const STATE_FILE = path.resolve(DATA_DIR, 'job-state.json');
 function load() {
   try {
     if (fs.existsSync(STATE_FILE)) {
-      return JSON.parse(fs.readFileSync(STATE_FILE, 'utf8'));
+      return JSON.parse(decrypt(fs.readFileSync(STATE_FILE, 'utf8')));
     }
   } catch (e) { console.warn('Could not load job state:', e.message); }
   return {};
@@ -21,7 +22,7 @@ let state = load();
 
 function persist() {
   try {
-    fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2));
+    fs.writeFileSync(STATE_FILE, encrypt(JSON.stringify(state)));
   } catch (e) { console.warn('Could not save job state:', e.message); }
 }
 
