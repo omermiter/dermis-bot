@@ -903,7 +903,7 @@ app.get('/schedule', requireAuth, (req, res) => {
     </div>
 
     <div class="card">
-      <div class="card-title">📸 This week — content schedule</div>
+      <div class="card-title">📸 This week — stories</div>
       <div id="content-body"><div class="shimmer" style="height:18px;margin-bottom:10px;"></div><div class="shimmer" style="height:18px;width:70%;"></div></div>
     </div>
 
@@ -985,10 +985,7 @@ app.get('/schedule', requireAuth, (req, res) => {
                 <div class="job-label">\${e.botLabel}\${e.account ? ' <span style=\\"font-size:11px;color:var(--accent-light);\\">' + e.account + '</span>' : ''}</div>
                 <div style="font-size:11px;color:var(--text3);">\${e.date} · \${e.time}</div>
               </div>
-              <div style="display:flex;gap:4px;">
-                <span style="\${e.sent.day_before ? ss : us}">\${e.sent.day_before ? '✅' : '⬜'} Day before</span>
-                <span style="\${e.sent.thirty_min ? ss : us}">\${e.sent.thirty_min ? '✅' : '⬜'} 30 min</span>
-              </div>
+              <span style="\${e.sent ? ss : us}">\${e.sent ? '✅ Reminder sent' : '⬜ Reminder pending'}</span>
             </div>
           \`).join('');
         }
@@ -1045,18 +1042,15 @@ app.get('/api/content-events', requireAuth, async (req, res) => {
     const { wasAlreadySent } = require('./sent-events');
     const start = new Date(); start.setHours(0, 0, 0, 0);
     const end = new Date(start); end.setDate(end.getDate() + 7);
-    const events = await getContentEvents(start, end);
+    const all = await getContentEvents(start, end);
+    const events = all.filter(e => e.botType.toUpperCase().includes('STORY'));
     res.json({ ok: true, events: events.map(e => ({
       id: e.id,
-      title: e.title,
       botLabel: e.botLabel,
       account: e.account,
       date: e.startTime.toLocaleDateString('he-IL', { weekday: 'short', day: '2-digit', month: '2-digit', timeZone: 'Asia/Jerusalem' }),
       time: e.timeString,
-      sent: {
-        day_before: wasAlreadySent(e.id, 'content_day_before'),
-        thirty_min: wasAlreadySent(e.id, 'content_30min'),
-      },
+      sent: wasAlreadySent(e.id, 'story_5min'),
     })) });
   } catch (e) { res.json({ ok: false, error: e.message }); }
 });
