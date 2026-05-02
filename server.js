@@ -19,6 +19,22 @@ const { createSession, destroySession, checkPassword, requireAuth } = require('.
 const { sendToArtistTemplate, sendToArtist } = require('./whatsapp');
 const crypto = require('crypto');
 
+// ─── Trusted device store ────────────────────────────────────────────────────
+const DEVICE_DURATION = 30 * 24 * 60 * 60 * 1000; // 30 days
+const trustedDevices = new Map();
+function createDeviceToken() {
+  const token = crypto.randomBytes(32).toString('hex');
+  trustedDevices.set(token, Date.now() + DEVICE_DURATION);
+  return token;
+}
+function isValidDevice(token) {
+  if (!token) return false;
+  const expiry = trustedDevices.get(token);
+  if (!expiry) return false;
+  if (Date.now() > expiry) { trustedDevices.delete(token); return false; }
+  return true;
+}
+
 // ─── OTP store ───────────────────────────────────────────────────────────────
 const otpPending = new Map();
 function generateOtp() {
@@ -347,6 +363,13 @@ app.post('/login', async (req, res) => {
   if (!checkPassword(password)) {
     return res.redirect(`/login?error=1&returnTo=${encodeURIComponent(returnTo)}`);
   }
+  // Trusted device — skip OTP
+  if (isValidDevice(req.cookies && req.cookies.dermis_device)) {
+    const sessionToken = createSession();
+    res.cookie('dermis_session', sessionToken, { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', maxAge: 30 * 24 * 60 * 60 * 1000 });
+    return res.redirect(returnTo.startsWith('/') ? returnTo : '/inbox');
+  }
+  // Unknown device — send OTP
   const { token, otp } = createOtpToken(returnTo);
   try {
     const result = await sendOtp(otp);
@@ -419,12 +442,10 @@ app.post('/login/otp', (req, res) => {
     return res.redirect(`/login/otp?t=${encodeURIComponent(t)}&error=wrong`);
   }
   const sessionToken = createSession();
-  res.cookie('dermis_session', sessionToken, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    maxAge: 30 * 24 * 60 * 60 * 1000,
-  });
+  const deviceToken = createDeviceToken();
+  const cookieOpts = { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', maxAge: 30 * 24 * 60 * 60 * 1000 };
+  res.cookie('dermis_session', sessionToken, cookieOpts);
+  res.cookie('dermis_device', deviceToken, cookieOpts);
   const safeReturn = (result.returnTo || '/inbox').startsWith('/') ? result.returnTo : '/inbox';
   res.redirect(safeReturn);
 });
