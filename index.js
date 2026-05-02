@@ -185,19 +185,9 @@ async function runHealthCheck() {
 // PERSONAL REMINDERS — for events with "remind" in the description
 // ════════════════════════════════════════════════════════════════════════════
 
-async function sendPersonalReminder(eventId, title, v2, sentKey, logLabel) {
-  if (!process.env.TEMPLATE_SID_PERSONAL_REMINDER) {
-    log('⚠️ TEMPLATE_SID_PERSONAL_REMINDER not set — skipping personal reminder');
-    return;
-  }
-  if (wasAlreadySent(eventId, sentKey)) return;
-  const result = await sendToArtistTemplate(process.env.TEMPLATE_SID_PERSONAL_REMINDER, { 1: title, 2: v2 });
-  if (result.success) { markSent(eventId, sentKey); log(`📅 ${logLabel}: ${title}`); }
-  else log(`⚠️ Personal reminder FAILED: ${result.error}`);
-}
-
 async function runJob_personalDayBeforeReminders() {
   try {
+    if (!process.env.TEMPLATE_SID_PERSONAL_REMINDER_DAY) { log('⚠️ TEMPLATE_SID_PERSONAL_REMINDER_DAY not set'); return; }
     const start = new Date();
     start.setDate(start.getDate() + 1);
     start.setHours(0, 0, 0, 0);
@@ -205,19 +195,26 @@ async function runJob_personalDayBeforeReminders() {
     end.setHours(23, 59, 59, 999);
     const events = await getPersonalReminderEvents(start, end);
     for (const event of events) {
-      await sendPersonalReminder(event.id, event.title, `מחר ב-${event.timeString}`, 'personal_day_before', 'Day-before reminder sent');
+      if (wasAlreadySent(event.id, 'personal_day_before')) continue;
+      const result = await sendToArtistTemplate(process.env.TEMPLATE_SID_PERSONAL_REMINDER_DAY, { 1: event.title, 2: event.timeString });
+      if (result.success) { markSent(event.id, 'personal_day_before'); log(`📅 Day-before reminder sent: ${event.title}`); }
+      else log(`⚠️ Day-before reminder FAILED: ${result.error}`);
     }
   } catch (e) { log(`❌ Personal day-before reminders error: ${e.message}`); }
 }
 
 async function runJob_personal30MinReminders() {
   try {
+    if (!process.env.TEMPLATE_SID_PERSONAL_REMINDER_30MIN) { log('⚠️ TEMPLATE_SID_PERSONAL_REMINDER_30MIN not set'); return; }
     const now = new Date();
     const from = new Date(now.getTime() + 20 * 60 * 1000);
     const to   = new Date(now.getTime() + 40 * 60 * 1000);
     const events = await getPersonalReminderEvents(from, to);
     for (const event of events) {
-      await sendPersonalReminder(event.id, event.title, `בעוד כ-30 דקות, ב-${event.timeString}`, 'personal_30min', '30-min reminder sent');
+      if (wasAlreadySent(event.id, 'personal_30min')) continue;
+      const result = await sendToArtistTemplate(process.env.TEMPLATE_SID_PERSONAL_REMINDER_30MIN, { 1: event.title, 2: event.timeString });
+      if (result.success) { markSent(event.id, 'personal_30min'); log(`📅 30-min reminder sent: ${event.title}`); }
+      else log(`⚠️ 30-min reminder FAILED: ${result.error}`);
     }
   } catch (e) { log(`❌ Personal 30-min reminders error: ${e.message}`); }
 }
