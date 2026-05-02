@@ -53,45 +53,97 @@ function escHtml(str) {
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
-// ─── Shared CSS ──────────────────────────────────────────────────────────────
+// ─── Design tokens + Shared CSS ──────────────────────────────────────────────
 const SHARED_CSS = `
-* { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f5; color: #1a1a1a; min-height: 100vh; }
-.header { background: #1a1a1a; color: white; padding: 16px 20px; position: sticky; top: 0; z-index: 10; }
-.header-row { display: flex; align-items: center; justify-content: space-between; }
-.header-title { font-size: 18px; font-weight: 600; }
-.header-sub { font-size: 12px; opacity: 0.6; margin-top: 2px; }
-.nav { display: flex; gap: 4px; margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.1); }
-.nav a { padding: 6px 12px; font-size: 12px; color: white; text-decoration: none; border-radius: 6px; opacity: 0.7; transition: all 0.15s; }
-.nav a.active { background: rgba(255,255,255,0.15); opacity: 1; }
-.nav a:hover { opacity: 1; }
-.logout { font-size: 11px; opacity: 0.5; color: white; text-decoration: none; }
-.logout:hover { opacity: 1; }
-.container { padding: 0 12px 80px; max-width: 600px; margin: 0 auto; }
-.btn { padding: 8px 14px; border-radius: 8px; border: 1px solid #ddd; background: white; font-size: 13px; cursor: pointer; color: #1a1a1a; font-family: inherit; }
-.btn:hover { background: #f0f0f0; }
-.btn.primary { background: #1a1a1a; color: white; border-color: #1a1a1a; }
-.btn.primary:hover { background: #333; }
+*{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --bg:#080808;--surface:#111;--surface2:#161616;
+  --border:#1f1f1f;--border2:#2a2a2a;
+  --accent:#7C3AED;--accent-light:#9B6DFF;--accent-bg:rgba(124,58,237,0.12);
+  --text:#f0f0f0;--text2:#888;--text3:#444;
+  --success:#22c55e;--success-bg:rgba(34,197,94,0.08);
+  --warn:#f59e0b;--warn-bg:rgba(245,158,11,0.08);
+  --error:#ef4444;--error-bg:rgba(239,68,68,0.08);
+}
+body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Segoe UI',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;}
+.header{background:rgba(8,8,8,0.96);border-bottom:1px solid var(--border);padding:16px 20px;position:sticky;top:0;z-index:100;backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);}
+.header-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
+.header-title{font-size:20px;font-weight:700;letter-spacing:4px;color:var(--text);}
+.header-sub{font-size:10px;color:var(--accent-light);letter-spacing:2px;text-transform:uppercase;margin-top:3px;font-weight:500;}
+.logout{font-size:12px;color:var(--text3);text-decoration:none;padding:6px 12px;border:1px solid var(--border2);border-radius:8px;transition:all .2s;font-weight:500;}
+.logout:hover{color:var(--text);border-color:var(--text3);}
+.nav{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none;-ms-overflow-style:none;}
+.nav::-webkit-scrollbar{display:none;}
+.nav a{padding:7px 14px;font-size:12px;font-weight:500;color:var(--text2);text-decoration:none;border-radius:8px;white-space:nowrap;transition:all .2s;letter-spacing:.2px;}
+.nav a.active{background:var(--accent);color:#fff;}
+.nav a:hover:not(.active){color:var(--text);background:var(--surface2);}
+.container{padding:16px 16px 100px;max-width:600px;margin:0 auto;}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:10px 16px;background:var(--surface2);color:var(--text);border:1px solid var(--border2);border-radius:10px;font-size:13px;font-weight:500;cursor:pointer;transition:all .2s;font-family:inherit;text-decoration:none;-webkit-tap-highlight-color:transparent;}
+.btn:hover{background:var(--border2);border-color:var(--text3);}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff;}
+.btn.primary:hover{background:#6D28D9;border-color:#6D28D9;}
+.btn:disabled{opacity:.4;cursor:not-allowed;}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:20px;margin-bottom:12px;}
+.card-title{font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:1px;margin-bottom:16px;}
+.job-row{display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid var(--border);gap:12px;}
+.job-row:last-child{border-bottom:none;}
+.job-label{font-size:13px;font-weight:500;color:var(--text);}
+.job-status{font-size:12px;color:var(--text2);}
+.job-row.ok .job-status{color:var(--success);}
+.job-row.warn .job-status{color:var(--warn);}
+.job-row.pending .job-status{color:var(--text3);}
+.info{font-size:12px;color:var(--text2);line-height:1.6;padding:12px 14px;background:var(--surface2);border-radius:10px;margin-top:10px;border:1px solid var(--border);}
 `;
+
+const HEAD_TAGS = `
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="DERMIS">
+  <meta name="theme-color" content="#080808">
+  <link rel="manifest" href="/manifest.json">`;
+
+const IOS_PWA_BANNER = `
+<div id="pwa-banner" style="display:none;position:fixed;bottom:0;left:0;right:0;background:#111;border-top:1px solid #7C3AED;padding:14px 20px;z-index:999;align-items:center;gap:14px;box-shadow:0 -8px 32px rgba(0,0,0,0.6);">
+  <div style="flex:1;">
+    <div style="font-size:13px;font-weight:600;color:#f0f0f0;margin-bottom:3px;">Add to Home Screen</div>
+    <div style="font-size:12px;color:#888;">Tap <strong style="color:#9B6DFF">Share ↑</strong> then <strong style="color:#9B6DFF">Add to Home Screen</strong></div>
+  </div>
+  <button onclick="document.getElementById('pwa-banner').style.display='none';localStorage.setItem('pwa-off','1')" style="background:transparent;border:1px solid #333;color:#666;border-radius:8px;padding:7px 11px;font-size:13px;cursor:pointer;flex-shrink:0;">✕</button>
+</div>
+<script>(function(){var a=/iphone|ipad|ipod/i.test(navigator.userAgent);var b=window.navigator.standalone;var c=localStorage.getItem('pwa-off');if(a&&!b&&!c)document.getElementById('pwa-banner').style.display='flex';})();</script>`;
 
 const HEADER = (active = '') => `
 <div class="header">
   <div class="header-row">
     <div>
-      <div class="header-title">🖤 DERMIS</div>
+      <div class="header-title">DERMIS</div>
       <div class="header-sub">Studio Assistant</div>
     </div>
     <a class="logout" href="/logout">Logout</a>
   </div>
   <div class="nav">
-    <a href="/inbox" class="${active === 'inbox' ? 'active' : ''}">Inbox</a>
-    <a href="/schedule" class="${active === 'schedule' ? 'active' : ''}">Schedule</a>
-    <a href="/templates" class="${active === 'templates' ? 'active' : ''}">Templates</a>
-    <a href="/test" class="${active === 'test' ? 'active' : ''}">Test</a>
-    <a href="/status" class="${active === 'status' ? 'active' : ''}">Status</a>
+    <a href="/inbox" class="${active==='inbox'?'active':''}">Inbox</a>
+    <a href="/schedule" class="${active==='schedule'?'active':''}">Schedule</a>
+    <a href="/templates" class="${active==='templates'?'active':''}">Templates</a>
+    <a href="/test" class="${active==='test'?'active':''}">Test</a>
+    <a href="/status" class="${active==='status'?'active':''}">Status</a>
   </div>
 </div>
 `;
+
+// ─── PWA manifest ────────────────────────────────────────────────────────────
+app.get('/manifest.json', (req, res) => {
+  res.json({
+    name: 'DERMIS Studio',
+    short_name: 'DERMIS',
+    description: 'Studio assistant for tattoo appointments',
+    start_url: '/inbox',
+    display: 'standalone',
+    background_color: '#080808',
+    theme_color: '#080808',
+    orientation: 'portrait',
+  });
+});
 
 // ════════════════════════════════════════════════════════════════════════════
 // PUBLIC ROUTES
@@ -147,24 +199,24 @@ app.get('/login', (req, res) => {
 <html lang="en"><head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>DERMIS — Login</title>
+  <title>DERMIS</title>
+  ${HEAD_TAGS}
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #1a1a1a; color: white; height: 100vh; display: flex; align-items: center; justify-content: center; }
-    .login-card { background: #2a2a2a; border-radius: 16px; padding: 32px 28px; width: 90%; max-width: 360px; box-shadow: 0 20px 60px rgba(0,0,0,0.4); }
-    .logo { font-size: 32px; text-align: center; margin-bottom: 8px; }
-    .title { text-align: center; font-size: 22px; font-weight: 600; margin-bottom: 4px; }
-    .subtitle { text-align: center; font-size: 12px; opacity: 0.5; margin-bottom: 24px; }
-    label { display: block; font-size: 11px; opacity: 0.7; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.05em; }
-    input[type="password"] { width: 100%; padding: 12px 14px; background: #1a1a1a; border: 1px solid #444; border-radius: 8px; color: white; font-size: 15px; font-family: inherit; }
-    input[type="password"]:focus { outline: none; border-color: #888; }
-    button { width: 100%; padding: 12px; background: white; color: #1a1a1a; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; margin-top: 16px; font-family: inherit; }
-    button:hover { background: #eee; }
-    .error { background: #4a1f1f; color: #ff8a8a; padding: 10px; border-radius: 6px; font-size: 12px; text-align: center; margin-bottom: 16px; }
+    *{box-sizing:border-box;margin:0;padding:0;}
+    body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display','Segoe UI',sans-serif;background:#080808;color:#f0f0f0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;}
+    .card{background:#111;border:1px solid #1f1f1f;border-radius:24px;padding:40px 32px;width:100%;max-width:360px;}
+    .title{text-align:center;font-size:28px;font-weight:700;letter-spacing:5px;margin-bottom:4px;}
+    .subtitle{text-align:center;font-size:10px;color:#9B6DFF;letter-spacing:2.5px;text-transform:uppercase;margin-bottom:36px;font-weight:500;}
+    label{display:block;font-size:11px;color:#666;margin-bottom:8px;text-transform:uppercase;letter-spacing:.8px;font-weight:500;}
+    input[type="password"]{width:100%;padding:14px 16px;background:#161616;border:1px solid #2a2a2a;border-radius:12px;color:#f0f0f0;font-size:16px;font-family:inherit;transition:border-color .2s;}
+    input[type="password"]:focus{outline:none;border-color:#7C3AED;}
+    button{width:100%;padding:14px;background:#7C3AED;color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:600;cursor:pointer;margin-top:20px;font-family:inherit;letter-spacing:.4px;transition:background .2s;}
+    button:hover{background:#6D28D9;}
+    button:active{background:#5B21B6;}
+    .error{background:rgba(239,68,68,.1);color:#ef4444;border:1px solid rgba(239,68,68,.2);padding:12px;border-radius:10px;font-size:12px;text-align:center;margin-bottom:20px;}
   </style>
 </head><body>
-  <form class="login-card" method="POST" action="/login">
-    <div class="logo">🖤</div>
+  <form class="card" method="POST" action="/login">
     <div class="title">DERMIS</div>
     <div class="subtitle">Studio Assistant</div>
     ${error}
@@ -234,22 +286,23 @@ app.get('/inbox', requireAuth, (req, res) => {
 <html lang="he"><head>
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
   <title>DERMIS — Inbox</title>
+  ${HEAD_TAGS}
   <style>
     ${SHARED_CSS}
-    .badge { background: #E24B4A; color: white; font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 20px; }
-    .badge.zero { background: #3B6D11; }
-    .actions { padding: 12px 0; display: flex; gap: 8px; align-items: center; }
-    .empty { text-align: center; padding: 60px 20px; color: #999; font-size: 14px; }
-    .reply { background: white; border-radius: 12px; padding: 14px 16px; margin-bottom: 10px; border-left: 3px solid transparent; cursor: pointer; transition: all 0.15s; }
-    .reply.unread { border-left-color: #1a1a1a; }
-    .reply.read { opacity: 0.7; }
-    .reply:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
-    .reply-header { display: flex; align-items: center; gap: 8px; margin-bottom: 3px; }
-    .client-name { font-size: 14px; font-weight: 600; flex: 1; }
-    .reply-time { font-size: 11px; color: #999; }
-    .dot { width: 8px; height: 8px; border-radius: 50%; background: #1a1a1a; flex-shrink: 0; }
-    .reply-phone { font-size: 11px; color: #999; margin-bottom: 6px; }
-    .reply-body { font-size: 13px; color: #333; line-height: 1.5; background: #f8f8f8; padding: 8px 10px; border-radius: 8px; white-space: pre-wrap; }
+    .badge{background:var(--error);color:#fff;font-size:11px;font-weight:600;padding:3px 9px;border-radius:20px;}
+    .badge.zero{background:var(--success);}
+    .actions{padding:12px 0;display:flex;gap:8px;align-items:center;}
+    .empty{text-align:center;padding:60px 20px;color:var(--text2);font-size:14px;}
+    .reply{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:14px 16px;margin-bottom:8px;border-left:3px solid transparent;cursor:pointer;transition:all .2s;}
+    .reply.unread{border-left-color:var(--accent);}
+    .reply.read{opacity:.5;}
+    .reply:hover{border-color:var(--border2);background:var(--surface2);}
+    .reply-header{display:flex;align-items:center;gap:8px;margin-bottom:3px;}
+    .client-name{font-size:14px;font-weight:600;color:var(--text);flex:1;}
+    .reply-time{font-size:11px;color:var(--text3);}
+    .dot{width:7px;height:7px;border-radius:50%;background:var(--accent);flex-shrink:0;}
+    .reply-phone{font-size:11px;color:var(--text2);margin-bottom:6px;}
+    .reply-body{font-size:13px;color:var(--text2);line-height:1.5;background:var(--surface2);padding:10px 12px;border-radius:8px;white-space:pre-wrap;border:1px solid var(--border);}
   </style>
 </head><body>
   ${HEADER('inbox')}
@@ -274,6 +327,7 @@ app.get('/inbox', requireAuth, (req, res) => {
     }
     setTimeout(() => location.reload(), 30000);
   </script>
+  ${IOS_PWA_BANNER}
 </body></html>`);
 });
 
@@ -333,20 +387,21 @@ app.get('/templates', requireAuth, (req, res) => {
 <html lang="en"><head>
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
   <title>DERMIS — Templates</title>
+  ${HEAD_TAGS}
   <style>
     ${SHARED_CSS}
-    .saved-toast { background: #EAF3DE; color: #3B6D11; padding: 10px 14px; border-radius: 8px; font-size: 13px; margin: 16px 0; text-align: center; }
-    .card { background: white; border-radius: 12px; padding: 16px; margin-bottom: 14px; }
-    .card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }
-    .tmpl-label { font-size: 14px; font-weight: 600; color: #1a1a1a; }
-    .tmpl-desc { font-size: 12px; color: #666; margin-top: 2px; line-height: 1.4; }
-    .placeholders { font-size: 11px; color: #666; margin-bottom: 8px; }
-    .ph { display: inline-block; background: #f0f0f0; padding: 2px 6px; border-radius: 4px; font-family: ui-monospace, SF Mono, monospace; color: #1a1a1a; font-size: 11px; margin-right: 4px; cursor: pointer; }
-    .ph:hover { background: #1a1a1a; color: white; }
-    textarea { width: 100%; border: 1px solid #ddd; border-radius: 8px; padding: 10px 12px; font-family: inherit; font-size: 13px; line-height: 1.5; resize: vertical; direction: rtl; text-align: right; }
-    textarea:focus { outline: none; border-color: #1a1a1a; }
-    .save-bar { position: sticky; bottom: 0; background: white; border-top: 1px solid #ddd; padding: 14px 12px; margin: 16px -12px 0; display: flex; gap: 10px; justify-content: space-between; align-items: center; }
-    .save-bar .info { font-size: 12px; color: #666; }
+    .saved-toast{background:var(--success-bg);color:var(--success);border:1px solid rgba(34,197,94,.2);padding:12px 16px;border-radius:10px;font-size:13px;margin:12px 0;text-align:center;}
+    .card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:18px;margin-bottom:12px;}
+    .card-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;}
+    .tmpl-label{font-size:14px;font-weight:600;color:var(--text);}
+    .tmpl-desc{font-size:12px;color:var(--text2);margin-top:3px;line-height:1.4;}
+    .placeholders{font-size:11px;color:var(--text3);margin-bottom:10px;}
+    .ph{display:inline-block;background:var(--surface2);border:1px solid var(--border2);padding:2px 8px;border-radius:5px;font-family:ui-monospace,'SF Mono',monospace;color:var(--accent-light);font-size:11px;margin-right:4px;cursor:pointer;transition:all .15s;}
+    .ph:hover{background:var(--accent);color:#fff;border-color:var(--accent);}
+    textarea{width:100%;border:1px solid var(--border2);border-radius:10px;padding:12px 14px;font-family:inherit;font-size:13px;line-height:1.6;resize:vertical;direction:rtl;text-align:right;background:var(--surface2);color:var(--text);transition:border-color .2s;}
+    textarea:focus{outline:none;border-color:var(--accent);}
+    .save-bar{position:sticky;bottom:0;background:var(--bg);border-top:1px solid var(--border);padding:14px 16px;margin:20px -16px 0;display:flex;gap:10px;justify-content:space-between;align-items:center;}
+    .save-bar .info{font-size:12px;color:var(--text3);}
   </style>
 </head><body>
   ${HEADER('templates')}
@@ -378,6 +433,7 @@ app.get('/templates', requireAuth, (req, res) => {
       });
     });
   </script>
+  ${IOS_PWA_BANNER}
 </body></html>`);
 });
 
@@ -414,22 +470,24 @@ app.get('/test', requireAuth, (req, res) => {
   res.send(`<!DOCTYPE html>
 <html lang="en"><head>
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>DERMIS — Test Message</title>
+  <title>DERMIS — Test</title>
+  ${HEAD_TAGS}
   <style>
     ${SHARED_CSS}
-    .card { background: white; border-radius: 12px; padding: 20px; margin-bottom: 14px; }
-    .card-title { font-size: 16px; font-weight: 600; margin-bottom: 6px; }
-    .card-desc { font-size: 12px; color: #666; line-height: 1.5; margin-bottom: 16px; }
-    label { display: block; font-size: 11px; color: #666; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 12px; }
-    label:first-of-type { margin-top: 0; }
-    select, input[type="text"] { width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; font-family: inherit; background: white; }
-    select:focus, input:focus { outline: none; border-color: #1a1a1a; }
-    .preview { background: #DCF8C6; border-radius: 12px 12px 0 12px; padding: 12px 14px; font-size: 13px; line-height: 1.5; white-space: pre-wrap; margin-top: 8px; max-width: 95%; min-height: 50px; }
-    .preview-label { font-size: 11px; color: #666; margin-top: 14px; margin-bottom: 4px; }
-    .success-toast { background: #EAF3DE; color: #3B6D11; padding: 12px 14px; border-radius: 8px; font-size: 13px; margin: 16px 0; text-align: center; }
-    .error-toast { background: #FCEBEB; color: #A32D2D; padding: 12px 14px; border-radius: 8px; font-size: 13px; margin: 16px 0; text-align: center; }
-    .info-row { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #666; padding: 10px 12px; background: #f8f8f8; border-radius: 8px; margin-bottom: 12px; }
-    .info-row .icon { font-size: 16px; }
+    .card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:20px;margin-bottom:12px;}
+    .card-title{font-size:15px;font-weight:600;margin-bottom:6px;color:var(--text);}
+    .card-desc{font-size:12px;color:var(--text2);line-height:1.5;margin-bottom:18px;}
+    label{display:block;font-size:11px;color:var(--text2);margin-bottom:7px;text-transform:uppercase;letter-spacing:.7px;margin-top:14px;font-weight:500;}
+    label:first-of-type{margin-top:0;}
+    select,input[type="text"]{width:100%;padding:11px 14px;border:1px solid var(--border2);border-radius:10px;font-size:14px;font-family:inherit;background:var(--surface2);color:var(--text);transition:border-color .2s;}
+    select:focus,input:focus{outline:none;border-color:var(--accent);}
+    select option{background:var(--surface);}
+    .preview{background:#1a1033;border:1px solid rgba(124,58,237,.3);border-radius:14px 14px 0 14px;padding:14px 16px;font-size:13px;line-height:1.6;white-space:pre-wrap;margin-top:8px;max-width:95%;min-height:50px;color:var(--text);}
+    .preview-label{font-size:11px;color:var(--text3);margin-top:14px;margin-bottom:6px;letter-spacing:.5px;}
+    .success-toast{background:var(--success-bg);color:var(--success);border:1px solid rgba(34,197,94,.2);padding:12px 16px;border-radius:10px;font-size:13px;margin:12px 0;text-align:center;}
+    .error-toast{background:var(--error-bg);color:var(--error);border:1px solid rgba(239,68,68,.2);padding:12px 16px;border-radius:10px;font-size:13px;margin:12px 0;text-align:center;}
+    .info-row{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--text2);padding:12px 14px;background:var(--surface2);border-radius:10px;margin-bottom:14px;border:1px solid var(--border);}
+    .info-row .icon{font-size:18px;}
   </style>
 </head><body>
   ${HEADER('test')}
@@ -491,6 +549,7 @@ app.get('/test', requireAuth, (req, res) => {
     }
     updatePreview();
   </script>
+  ${IOS_PWA_BANNER}
 </body></html>`);
 });
 
@@ -560,19 +619,8 @@ app.get('/status', requireAuth, (req, res) => {
 <html lang="en"><head>
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
   <title>DERMIS — Status</title>
-  <style>
-    ${SHARED_CSS}
-    .card { background: white; border-radius: 12px; padding: 16px; margin-bottom: 14px; }
-    .card-title { font-size: 14px; font-weight: 600; margin-bottom: 12px; }
-    .job-row { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #eee; gap: 12px; }
-    .job-row:last-child { border-bottom: none; }
-    .job-label { font-size: 13px; font-weight: 500; }
-    .job-status { font-size: 12px; }
-    .job-row.ok .job-status { color: #3B6D11; }
-    .job-row.warn .job-status { color: #854F0B; }
-    .job-row.pending .job-status { color: #666; }
-    .info { font-size: 12px; color: #666; line-height: 1.5; padding: 12px; background: #f8f8f8; border-radius: 8px; margin-top: 8px; }
-  </style>
+  ${HEAD_TAGS}
+  <style>${SHARED_CSS}</style>
 </head><body>
   ${HEADER('status')}
   <div class="container">
@@ -608,9 +656,9 @@ app.get('/status', requireAuth, (req, res) => {
 
     <div style="display:flex;gap:8px;">
       <button class="btn" style="flex:1;" onclick="location.reload()">↻ Refresh</button>
-      <button class="btn" id="hc-btn" style="flex:1;background:#1a1a1a;color:white;" onclick="runHealthCheckNow()">🩺 Run Health Check Now</button>
+      <button class="btn primary" id="hc-btn" style="flex:1;" onclick="runHealthCheckNow()">🩺 Run Health Check Now</button>
     </div>
-    <div id="hc-result" style="display:none;margin-top:10px;padding:10px;border-radius:8px;font-size:13px;"></div>
+    <div id="hc-result" style="display:none;margin-top:10px;padding:12px 14px;border-radius:10px;font-size:13px;border:1px solid var(--border);"></div>
   </div>
   <script>
     async function runHealthCheckNow() {
@@ -623,14 +671,14 @@ app.get('/status', requireAuth, (req, res) => {
         const r = await fetch('/run-health-check', { method: 'POST' });
         const data = await r.json();
         if (data.ok) {
-          result.style.cssText = 'display:block;margin-top:10px;padding:10px;border-radius:8px;font-size:13px;background:#f0fdf4;color:#3B6D11;';
+          result.style.cssText = 'display:block;margin-top:10px;padding:12px 14px;border-radius:10px;font-size:13px;background:var(--success-bg);color:var(--success);border:1px solid rgba(34,197,94,.2);';
           result.textContent = '✅ Health check completed — any missed jobs have been re-run.';
         } else {
-          result.style.cssText = 'display:block;margin-top:10px;padding:10px;border-radius:8px;font-size:13px;background:#fff1f1;color:#A32D2D;';
+          result.style.cssText = 'display:block;margin-top:10px;padding:12px 14px;border-radius:10px;font-size:13px;background:var(--error-bg);color:var(--error);border:1px solid rgba(239,68,68,.2);';
           result.textContent = '❌ Error: ' + data.error;
         }
       } catch (e) {
-        result.style.cssText = 'display:block;margin-top:10px;padding:10px;border-radius:8px;font-size:13px;background:#fff1f1;color:#A32D2D;';
+        result.style.cssText = 'display:block;margin-top:10px;padding:12px 14px;border-radius:10px;font-size:13px;background:var(--error-bg);color:var(--error);border:1px solid rgba(239,68,68,.2);';
         result.textContent = '❌ Request failed.';
       }
       btn.disabled = false;
@@ -638,6 +686,7 @@ app.get('/status', requireAuth, (req, res) => {
       location.reload();
     }
   </script>
+  ${IOS_PWA_BANNER}
 </body></html>`);
 });
 
@@ -647,14 +696,8 @@ app.get('/schedule', requireAuth, (req, res) => {
 <html lang="en"><head>
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
   <title>DERMIS — Schedule</title>
-  <style>
-    ${SHARED_CSS}
-    .card { background: white; border-radius: 12px; padding: 16px; margin-bottom: 14px; }
-    .card-title { font-size: 14px; font-weight: 600; margin-bottom: 12px; }
-    .job-row { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #eee; gap: 12px; }
-    .job-row:last-child { border-bottom: none; }
-    .job-label { font-size: 13px; font-weight: 500; }
-  </style>
+  ${HEAD_TAGS}
+  <style>${SHARED_CSS}</style>
 </head><body>
   ${HEADER('schedule')}
   <div class="container">
@@ -686,9 +729,9 @@ app.get('/schedule', requireAuth, (req, res) => {
           sbox.innerHTML = data.sessions.map(s => {
             const badges = Object.entries(labels).map(([key, label]) => {
               const sent = s.sent[key];
-              if (sent) return \`<span style="font-size:11px;padding:2px 7px;border-radius:20px;background:#e6f4ea;color:#3B6D11;">✅ \${label}</span>\`;
+              if (sent) return \`<span style="font-size:11px;padding:2px 7px;border-radius:20px;background:rgba(34,197,94,.12);color:#22c55e;border:1px solid rgba(34,197,94,.25);">✅ \${label}</span>\`;
               const payload = JSON.stringify({ eventId: s.id, messageType: key, phone: s.phone, firstName: s.firstName, timeString: s.time });
-              return \`<button onclick="sendManually(this,\${payload.replace(/"/g,'&quot;')})" style="font-size:11px;padding:2px 7px;border-radius:20px;background:#f0f0f0;color:#666;border:none;cursor:pointer;">⬜ \${label} ▶</button>\`;
+              return \`<button onclick="sendManually(this,\${payload.replace(/"/g,'&quot;')})" style="font-size:11px;padding:2px 7px;border-radius:20px;background:#1f1f1f;color:#888;border:1px solid #2a2a2a;cursor:pointer;">⬜ \${label} ▶</button>\`;
             }).join(' ');
             return \`<div class="job-row" style="flex-direction:column;align-items:flex-start;gap:6px;">
               <div style="display:flex;justify-content:space-between;width:100%;align-items:center;">
@@ -711,12 +754,14 @@ app.get('/schedule', requireAuth, (req, res) => {
           rbox.innerHTML = '<span style="font-size:13px;color:#999;">No reminder events this week.</span>';
         } else {
           rbox.innerHTML = data.events.map(e => {
+            const sent_s = 'font-size:11px;padding:2px 7px;border-radius:20px;background:rgba(34,197,94,.12);color:#22c55e;border:1px solid rgba(34,197,94,.25);';
+            const unsent_s = 'font-size:11px;padding:2px 7px;border-radius:20px;background:#1f1f1f;color:#555;border:1px solid #2a2a2a;';
             const dayBadge = e.sent.day_before
-              ? \`<span style="font-size:11px;padding:2px 7px;border-radius:20px;background:#e6f4ea;color:#3B6D11;">✅ יום לפני</span>\`
-              : \`<span style="font-size:11px;padding:2px 7px;border-radius:20px;background:#f0f0f0;color:#999;">⬜ יום לפני</span>\`;
+              ? \`<span style="\${sent_s}">✅ יום לפני</span>\`
+              : \`<span style="\${unsent_s}">⬜ יום לפני</span>\`;
             const minBadge = e.sent.thirty_min
-              ? \`<span style="font-size:11px;padding:2px 7px;border-radius:20px;background:#e6f4ea;color:#3B6D11;">✅ 30 דקות</span>\`
-              : \`<span style="font-size:11px;padding:2px 7px;border-radius:20px;background:#f0f0f0;color:#999;">⬜ 30 דקות</span>\`;
+              ? \`<span style="\${sent_s}">✅ 30 דקות</span>\`
+              : \`<span style="\${unsent_s}">⬜ 30 דקות</span>\`;
             return \`<div class="job-row" style="flex-direction:column;align-items:flex-start;gap:6px;">
               <div style="display:flex;justify-content:space-between;width:100%;align-items:center;">
                 <div class="job-label" style="direction:rtl;">\${e.title}</div>
@@ -738,13 +783,14 @@ app.get('/schedule', requireAuth, (req, res) => {
         });
         const data = await r.json();
         if (data.ok) {
-          btn.style.cssText = 'font-size:11px;padding:2px 7px;border-radius:20px;background:#e6f4ea;color:#3B6D11;border:none;';
+          btn.style.cssText = 'font-size:11px;padding:2px 7px;border-radius:20px;background:rgba(34,197,94,.15);color:#22c55e;border:1px solid rgba(34,197,94,.3);cursor:default;';
           btn.textContent = '✅ ' + btn.textContent.replace('⏳ Sending...','').trim().replace(' ▶','');
           btn.disabled = true;
         } else { btn.textContent = '❌ ' + (data.error || 'Failed'); btn.disabled = false; }
       } catch(e) { btn.textContent = '❌ Error'; btn.disabled = false; }
     }
   </script>
+  ${IOS_PWA_BANNER}
 </body></html>`);
 });
 
