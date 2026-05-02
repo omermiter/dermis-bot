@@ -629,7 +629,11 @@ app.get('/status', requireAuth, (req, res) => {
         box.innerHTML = data.sessions.map(s => {
           const badges = Object.entries(labels).map(([key, label]) => {
             const sent = s.sent[key];
-            return \`<span style="font-size:11px;padding:2px 7px;border-radius:20px;background:\${sent?'#e6f4ea':'#f0f0f0'};color:\${sent?'#3B6D11':'#999'};">\${sent?'✅':'⬜'} \${label}</span>\`;
+            if (sent) {
+              return \`<span style="font-size:11px;padding:2px 7px;border-radius:20px;background:#e6f4ea;color:#3B6D11;">✅ \${label}</span>\`;
+            }
+            const payload = JSON.stringify({ eventId: s.id, messageType: key, phone: s.phone, firstName: s.firstName, timeString: s.time });
+            return \`<button onclick="sendManually(this, \${payload.replace(/"/g,'&quot;')})" style="font-size:11px;padding:2px 7px;border-radius:20px;background:#f0f0f0;color:#666;border:none;cursor:pointer;">⬜ \${label} ▶</button>\`;
           }).join(' ');
           return \`<div class="job-row" style="flex-direction:column;align-items:flex-start;gap:6px;">
             <div style="display:flex;justify-content:space-between;width:100%;align-items:center;">
@@ -643,6 +647,30 @@ app.get('/status', requireAuth, (req, res) => {
         box.innerHTML = '<span style="font-size:13px;color:#A32D2D;">❌ Failed to load calendar.</span>';
       }
     })();
+
+    async function sendManually(btn, payload) {
+      btn.disabled = true;
+      btn.textContent = '⏳ Sending...';
+      try {
+        const r = await fetch('/api/send-manually', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(typeof payload === 'string' ? JSON.parse(payload) : payload),
+        });
+        const data = await r.json();
+        if (data.ok) {
+          btn.style.cssText = 'font-size:11px;padding:2px 7px;border-radius:20px;background:#e6f4ea;color:#3B6D11;border:none;';
+          btn.textContent = '✅ ' + btn.textContent.replace('⏳ Sending...','').trim().replace(' ▶','');
+          btn.disabled = true;
+        } else {
+          btn.textContent = '❌ ' + (data.error || 'Failed');
+          btn.disabled = false;
+        }
+      } catch(e) {
+        btn.textContent = '❌ Error';
+        btn.disabled = false;
+      }
+    }
 
     async function runHealthCheckNow() {
       const btn = document.getElementById('hc-btn');
@@ -684,6 +712,7 @@ app.get('/api/upcoming-sessions', requireAuth, async (req, res) => {
     const sessions = await getSessionsInRange(start, end);
     const MSG_TYPES = ['reminder', 'aftercare', 'day_three', 'day_seven'];
     res.json({ ok: true, sessions: sessions.map(s => ({
+      id: s.id,
       firstName: s.firstName,
       fullName: s.fullName,
       phone: s.rawPhone,
@@ -694,6 +723,37 @@ app.get('/api/upcoming-sessions', requireAuth, async (req, res) => {
     })) });
   } catch (e) {
     res.json({ ok: false, error: e.message });
+  }
+});
+
+// ─── Manual message send ─────────────────────────────────────────────────────
+app.post('/api/send-manually', requireAuth, async (req, res) => {
+  const { eventId, messageType, phone, firstName, timeString } = req.body;
+  if (!eventId || !messageType || !phone || !firstName)
+    return res.json({ ok: false, error: 'Missing parameters' });
+
+  const { wasAlreadySent, markSent } = require('./sent-events');
+  const { sendToClient } = require('./whatsapp');
+
+  if (wasAlreadySent(eventId, messageType))
+    return res.json({ ok: false, error: 'Already sent' });
+
+  const typeToMsg = {
+    reminder:  () => messages.reminder(firstName, timeString || ''),
+    aftercare: () => messages.aftercare(firstName),
+    day_three: () => messages.healingCheckIn(firstName, ''),
+    day_seven: () => messages.healingCheckIn(firstName, ''),
+  };
+  if (!typeToMsg[messageType]) return res.json({ ok: false, error: 'Unknown type' });
+
+  const msg = typeToMsg[messageType]();
+  const result = await sendToClient(`whatsapp:${phone}`, msg.templateSid, msg.variables);
+  if (result.success) {
+    markSent(eventId, messageType);
+    console.log(`📤 Manual send: ${messageType} → ${firstName} (${phone})`);
+    res.json({ ok: true });
+  } else {
+    res.json({ ok: false, error: result.error });
   }
 });
 
