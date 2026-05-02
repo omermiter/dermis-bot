@@ -16,7 +16,37 @@ const { analyze } = require('./sentiment');
 const pendingReviews = require('./pending-reviews');
 const messages = require('./messages');
 const { createSession, destroySession, checkPassword, requireAuth } = require('./auth');
-const { sendToArtistTemplate } = require('./whatsapp');
+const { sendToArtistTemplate, sendToArtist } = require('./whatsapp');
+const crypto = require('crypto');
+
+// ─── OTP store ───────────────────────────────────────────────────────────────
+const otpPending = new Map();
+function generateOtp() {
+  return String(Math.floor(100000 + Math.random() * 900000));
+}
+function createOtpToken(returnTo) {
+  const otp = generateOtp();
+  const token = crypto.randomBytes(20).toString('hex');
+  otpPending.set(token, { otp, expiresAt: Date.now() + 5 * 60 * 1000, returnTo, attempts: 0 });
+  return { token, otp };
+}
+function verifyOtp(token, submitted) {
+  const entry = otpPending.get(token);
+  if (!entry) return { ok: false, reason: 'expired' };
+  if (Date.now() > entry.expiresAt) { otpPending.delete(token); return { ok: false, reason: 'expired' }; }
+  entry.attempts++;
+  if (entry.attempts > 5) { otpPending.delete(token); return { ok: false, reason: 'too_many' }; }
+  if (submitted !== entry.otp) return { ok: false, reason: 'wrong' };
+  otpPending.delete(token);
+  return { ok: true, returnTo: entry.returnTo };
+}
+async function sendOtp(otp) {
+  const text = `Your DERMIS login code: ${otp}\nValid for 5 minutes.`;
+  if (process.env.TEMPLATE_SID_ARTIST_NOTIFICATION) {
+    return sendToArtistTemplate(process.env.TEMPLATE_SID_ARTIST_NOTIFICATION, { 1: 'DERMIS', 2: 'Login OTP', 3: text });
+  }
+  return sendToArtist(text);
+}
 
 const app = express();
 app.use(express.urlencoded({ extended: false }));
@@ -250,20 +280,91 @@ app.get('/login', (req, res) => {
 </body></html>`);
 });
 
-app.post('/login', (req, res) => {
+app.post('/login', async (req, res) => {
   const password = req.body.password || '';
   const returnTo = req.body.returnTo || '/inbox';
   if (!checkPassword(password)) {
     return res.redirect(`/login?error=1&returnTo=${encodeURIComponent(returnTo)}`);
   }
-  const token = createSession();
-  res.cookie('dermis_session', token, {
+  const { token, otp } = createOtpToken(returnTo);
+  try {
+    const result = await sendOtp(otp);
+    if (!result.success) console.warn(`⚠️  OTP send failed: ${result.error}`);
+  } catch (e) {
+    console.warn(`⚠️  OTP send error: ${e.message}`);
+  }
+  res.redirect(`/login/otp?t=${token}`);
+});
+
+// ─── OTP verification page ────────────────────────────────────────────────────
+const OTP_STYLE = `
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display','Segoe UI',sans-serif;background:#080808;color:#f0f0f0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;}
+  .card{background:#111;border:1px solid #1f1f1f;border-radius:24px;padding:40px 32px;width:100%;max-width:360px;}
+  .title{text-align:center;font-size:28px;font-weight:700;letter-spacing:5px;margin-bottom:4px;}
+  .subtitle{text-align:center;font-size:10px;color:#9B6DFF;letter-spacing:2.5px;text-transform:uppercase;margin-bottom:8px;font-weight:500;}
+  .hint{text-align:center;font-size:12px;color:#555;margin-bottom:32px;line-height:1.5;}
+  label{display:block;font-size:11px;color:#666;margin-bottom:8px;text-transform:uppercase;letter-spacing:.8px;font-weight:500;}
+  input[type="text"]{width:100%;padding:16px;background:#161616;border:1px solid #2a2a2a;border-radius:12px;color:#f0f0f0;font-size:28px;font-family:ui-monospace,monospace;letter-spacing:8px;text-align:center;transition:border-color .2s;}
+  input[type="text"]:focus{outline:none;border-color:#7C3AED;box-shadow:0 0 0 3px rgba(124,58,237,.15);}
+  button{width:100%;padding:14px;background:#7C3AED;color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:600;cursor:pointer;margin-top:20px;font-family:inherit;transition:all .2s;}
+  button:hover{background:#6D28D9;box-shadow:0 4px 20px rgba(124,58,237,.4);}
+  button:active{transform:scale(.98);}
+  .back{display:block;text-align:center;margin-top:16px;font-size:12px;color:#444;text-decoration:none;transition:color .2s;}
+  .back:hover{color:#888;}
+  .error{background:rgba(239,68,68,.1);color:#ef4444;border:1px solid rgba(239,68,68,.2);padding:12px;border-radius:10px;font-size:12px;text-align:center;margin-bottom:20px;}
+  @keyframes fadeUp{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:translateY(0)}}
+  @keyframes slideDown{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
+  .card{animation:fadeUp .5s cubic-bezier(0.16,1,0.3,1) both;}
+  .error{animation:slideDown .3s cubic-bezier(0.16,1,0.3,1);}
+`;
+
+app.get('/login/otp', (req, res) => {
+  const t = req.query.t || '';
+  const errorMsg = req.query.error === 'wrong' ? '<div class="error">Incorrect code — try again</div>'
+    : req.query.error === 'expired' ? '<div class="error">Code expired — please log in again</div>'
+    : req.query.error === 'too_many' ? '<div class="error">Too many attempts — please log in again</div>'
+    : '';
+  if (!t) return res.redirect('/login');
+  res.send(`<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DERMIS — Verify</title>
+  ${HEAD_TAGS}
+  <style>${OTP_STYLE}</style>
+</head><body>
+  <form class="card" method="POST" action="/login/otp">
+    <div class="title">DERMIS</div>
+    <div class="subtitle">Two-Factor Auth</div>
+    <div class="hint">A 6-digit code was sent to your WhatsApp</div>
+    ${errorMsg}
+    <label>Enter code</label>
+    <input type="text" name="otp" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" autofocus required>
+    <input type="hidden" name="t" value="${escHtml(t)}">
+    <button type="submit">Verify</button>
+    <a class="back" href="/login">← Back to login</a>
+  </form>
+</body></html>`);
+});
+
+app.post('/login/otp', (req, res) => {
+  const t = req.body.t || '';
+  const submitted = (req.body.otp || '').trim();
+  const result = verifyOtp(t, submitted);
+  if (!result.ok) {
+    if (result.reason === 'expired' || result.reason === 'too_many') {
+      return res.redirect(`/login?error=1`);
+    }
+    return res.redirect(`/login/otp?t=${encodeURIComponent(t)}&error=wrong`);
+  }
+  const sessionToken = createSession();
+  res.cookie('dermis_session', sessionToken, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
     maxAge: 30 * 24 * 60 * 60 * 1000,
   });
-  const safeReturn = returnTo.startsWith('/') ? returnTo : '/inbox';
+  const safeReturn = (result.returnTo || '/inbox').startsWith('/') ? result.returnTo : '/inbox';
   res.redirect(safeReturn);
 });
 
