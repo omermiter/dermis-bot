@@ -85,6 +85,7 @@ const HEADER = (active = '') => `
   </div>
   <div class="nav">
     <a href="/inbox" class="${active === 'inbox' ? 'active' : ''}">Inbox</a>
+    <a href="/schedule" class="${active === 'schedule' ? 'active' : ''}">Schedule</a>
     <a href="/templates" class="${active === 'templates' ? 'active' : ''}">Templates</a>
     <a href="/test" class="${active === 'test' ? 'active' : ''}">Test</a>
     <a href="/status" class="${active === 'status' ? 'active' : ''}">Status</a>
@@ -586,11 +587,13 @@ app.get('/status', requireAuth, (req, res) => {
     <div class="card">
       <div class="card-title">📋 Meta template registration</div>
       ${[
-        ['TEMPLATE_SID_REMINDER',             '24h Reminder'],
-        ['TEMPLATE_SID_AFTERCARE',            'Same-day Aftercare'],
-        ['TEMPLATE_SID_HEALING_CHECKIN',      'Day-3 Healing Check'],
-        ['TEMPLATE_SID_REVIEW_REQUEST',       'Review Request'],
-        ['TEMPLATE_SID_ARTIST_NOTIFICATION',  'Artist Reply Notification'],
+        ['TEMPLATE_SID_REMINDER',                 '24h Reminder'],
+        ['TEMPLATE_SID_AFTERCARE',               'Same-day Aftercare'],
+        ['TEMPLATE_SID_HEALING_CHECKIN',         'Day-3 Healing Check'],
+        ['TEMPLATE_SID_REVIEW_REQUEST',          'Review Request'],
+        ['TEMPLATE_SID_ARTIST_NOTIFICATION',     'Artist Reply Notification'],
+        ['TEMPLATE_SID_PERSONAL_REMINDER_DAY',   'Personal Reminder — Day Before'],
+        ['TEMPLATE_SID_PERSONAL_REMINDER_30MIN', 'Personal Reminder — 30 Min Before'],
       ].map(([env, label]) => {
         const v = process.env[env];
         const status = v
@@ -603,11 +606,6 @@ app.get('/status', requireAuth, (req, res) => {
       </div>
     </div>
 
-    <div class="card">
-      <div class="card-title">📅 Next 7 days — calendar sessions</div>
-      <div id="cal-body"><span style="font-size:13px;color:#999;">Loading…</span></div>
-    </div>
-
     <div style="display:flex;gap:8px;">
       <button class="btn" style="flex:1;" onclick="location.reload()">↻ Refresh</button>
       <button class="btn" id="hc-btn" style="flex:1;background:#1a1a1a;color:white;" onclick="runHealthCheckNow()">🩺 Run Health Check Now</button>
@@ -615,63 +613,6 @@ app.get('/status', requireAuth, (req, res) => {
     <div id="hc-result" style="display:none;margin-top:10px;padding:10px;border-radius:8px;font-size:13px;"></div>
   </div>
   <script>
-    (async () => {
-      const box = document.getElementById('cal-body');
-      try {
-        const r = await fetch('/api/upcoming-sessions');
-        const data = await r.json();
-        if (!data.ok) { box.innerHTML = '<span style="font-size:13px;color:#A32D2D;">❌ ' + data.error + '</span>'; return; }
-        if (data.sessions.length === 0) {
-          box.innerHTML = '<span style="font-size:13px;color:#999;">No sessions found in the next 7 days.</span>';
-          return;
-        }
-        const labels = { reminder: '24h', aftercare: 'Aftercare', day_three: 'Day 3', day_seven: 'Day 7' };
-        box.innerHTML = data.sessions.map(s => {
-          const badges = Object.entries(labels).map(([key, label]) => {
-            const sent = s.sent[key];
-            if (sent) {
-              return \`<span style="font-size:11px;padding:2px 7px;border-radius:20px;background:#e6f4ea;color:#3B6D11;">✅ \${label}</span>\`;
-            }
-            const payload = JSON.stringify({ eventId: s.id, messageType: key, phone: s.phone, firstName: s.firstName, timeString: s.time });
-            return \`<button onclick="sendManually(this, \${payload.replace(/"/g,'&quot;')})" style="font-size:11px;padding:2px 7px;border-radius:20px;background:#f0f0f0;color:#666;border:none;cursor:pointer;">⬜ \${label} ▶</button>\`;
-          }).join(' ');
-          return \`<div class="job-row" style="flex-direction:column;align-items:flex-start;gap:6px;">
-            <div style="display:flex;justify-content:space-between;width:100%;align-items:center;">
-              <div class="job-label" style="direction:rtl;">\${s.title}</div>
-              <div style="font-size:11px;color:#666;">\${s.date} · \${s.time}</div>
-            </div>
-            <div style="display:flex;gap:4px;flex-wrap:wrap;">\${badges}</div>
-          </div>\`;
-        }).join('');
-      } catch(e) {
-        box.innerHTML = '<span style="font-size:13px;color:#A32D2D;">❌ Failed to load calendar.</span>';
-      }
-    })();
-
-    async function sendManually(btn, payload) {
-      btn.disabled = true;
-      btn.textContent = '⏳ Sending...';
-      try {
-        const r = await fetch('/api/send-manually', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(typeof payload === 'string' ? JSON.parse(payload) : payload),
-        });
-        const data = await r.json();
-        if (data.ok) {
-          btn.style.cssText = 'font-size:11px;padding:2px 7px;border-radius:20px;background:#e6f4ea;color:#3B6D11;border:none;';
-          btn.textContent = '✅ ' + btn.textContent.replace('⏳ Sending...','').trim().replace(' ▶','');
-          btn.disabled = true;
-        } else {
-          btn.textContent = '❌ ' + (data.error || 'Failed');
-          btn.disabled = false;
-        }
-      } catch(e) {
-        btn.textContent = '❌ Error';
-        btn.disabled = false;
-      }
-    }
-
     async function runHealthCheckNow() {
       const btn = document.getElementById('hc-btn');
       const result = document.getElementById('hc-result');
@@ -698,6 +639,136 @@ app.get('/status', requireAuth, (req, res) => {
     }
   </script>
 </body></html>`);
+});
+
+// ─── Schedule page ───────────────────────────────────────────────────────────
+app.get('/schedule', requireAuth, (req, res) => {
+  res.send(`<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DERMIS — Schedule</title>
+  <style>
+    ${SHARED_CSS}
+    .card { background: white; border-radius: 12px; padding: 16px; margin-bottom: 14px; }
+    .card-title { font-size: 14px; font-weight: 600; margin-bottom: 12px; }
+    .job-row { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #eee; gap: 12px; }
+    .job-row:last-child { border-bottom: none; }
+    .job-label { font-size: 13px; font-weight: 500; }
+  </style>
+</head><body>
+  ${HEADER('schedule')}
+  <div class="container">
+
+    <div class="card">
+      <div class="card-title">📅 This week — client sessions</div>
+      <div id="sessions-body"><span style="font-size:13px;color:#999;">Loading…</span></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">⏰ This week — personal reminders</div>
+      <div id="remind-body"><span style="font-size:13px;color:#999;">Loading…</span></div>
+    </div>
+
+    <button class="btn" style="width:100%;" onclick="location.reload()">↻ Refresh</button>
+  </div>
+  <script>
+    (async () => {
+      // ── Client sessions ──
+      const sbox = document.getElementById('sessions-body');
+      try {
+        const r = await fetch('/api/upcoming-sessions');
+        const data = await r.json();
+        if (!data.ok) { sbox.innerHTML = '<span style="font-size:13px;color:#A32D2D;">❌ ' + data.error + '</span>'; }
+        else if (data.sessions.length === 0) {
+          sbox.innerHTML = '<span style="font-size:13px;color:#999;">No sessions this week.</span>';
+        } else {
+          const labels = { reminder: '24h', aftercare: 'Aftercare', day_three: 'Day 3', day_seven: 'Day 7' };
+          sbox.innerHTML = data.sessions.map(s => {
+            const badges = Object.entries(labels).map(([key, label]) => {
+              const sent = s.sent[key];
+              if (sent) return \`<span style="font-size:11px;padding:2px 7px;border-radius:20px;background:#e6f4ea;color:#3B6D11;">✅ \${label}</span>\`;
+              const payload = JSON.stringify({ eventId: s.id, messageType: key, phone: s.phone, firstName: s.firstName, timeString: s.time });
+              return \`<button onclick="sendManually(this,\${payload.replace(/"/g,'&quot;')})" style="font-size:11px;padding:2px 7px;border-radius:20px;background:#f0f0f0;color:#666;border:none;cursor:pointer;">⬜ \${label} ▶</button>\`;
+            }).join(' ');
+            return \`<div class="job-row" style="flex-direction:column;align-items:flex-start;gap:6px;">
+              <div style="display:flex;justify-content:space-between;width:100%;align-items:center;">
+                <div class="job-label" style="direction:rtl;">\${s.title}</div>
+                <div style="font-size:11px;color:#666;">\${s.date} · \${s.time}</div>
+              </div>
+              <div style="display:flex;gap:4px;flex-wrap:wrap;">\${badges}</div>
+            </div>\`;
+          }).join('');
+        }
+      } catch(e) { sbox.innerHTML = '<span style="font-size:13px;color:#A32D2D;">❌ Failed to load sessions.</span>'; }
+
+      // ── Personal reminders ──
+      const rbox = document.getElementById('remind-body');
+      try {
+        const r = await fetch('/api/remind-events');
+        const data = await r.json();
+        if (!data.ok) { rbox.innerHTML = '<span style="font-size:13px;color:#A32D2D;">❌ ' + data.error + '</span>'; }
+        else if (data.events.length === 0) {
+          rbox.innerHTML = '<span style="font-size:13px;color:#999;">No reminder events this week.</span>';
+        } else {
+          rbox.innerHTML = data.events.map(e => {
+            const dayBadge = e.sent.day_before
+              ? \`<span style="font-size:11px;padding:2px 7px;border-radius:20px;background:#e6f4ea;color:#3B6D11;">✅ יום לפני</span>\`
+              : \`<span style="font-size:11px;padding:2px 7px;border-radius:20px;background:#f0f0f0;color:#999;">⬜ יום לפני</span>\`;
+            const minBadge = e.sent.thirty_min
+              ? \`<span style="font-size:11px;padding:2px 7px;border-radius:20px;background:#e6f4ea;color:#3B6D11;">✅ 30 דקות</span>\`
+              : \`<span style="font-size:11px;padding:2px 7px;border-radius:20px;background:#f0f0f0;color:#999;">⬜ 30 דקות</span>\`;
+            return \`<div class="job-row" style="flex-direction:column;align-items:flex-start;gap:6px;">
+              <div style="display:flex;justify-content:space-between;width:100%;align-items:center;">
+                <div class="job-label" style="direction:rtl;">\${e.title}</div>
+                <div style="font-size:11px;color:#666;">\${e.date} · \${e.time}</div>
+              </div>
+              <div style="display:flex;gap:4px;">\${dayBadge} \${minBadge}</div>
+            </div>\`;
+          }).join('');
+        }
+      } catch(e) { rbox.innerHTML = '<span style="font-size:13px;color:#A32D2D;">❌ Failed to load reminders.</span>'; }
+    })();
+
+    async function sendManually(btn, payload) {
+      btn.disabled = true; btn.textContent = '⏳ Sending...';
+      try {
+        const r = await fetch('/api/send-manually', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(typeof payload === 'string' ? JSON.parse(payload) : payload),
+        });
+        const data = await r.json();
+        if (data.ok) {
+          btn.style.cssText = 'font-size:11px;padding:2px 7px;border-radius:20px;background:#e6f4ea;color:#3B6D11;border:none;';
+          btn.textContent = '✅ ' + btn.textContent.replace('⏳ Sending...','').trim().replace(' ▶','');
+          btn.disabled = true;
+        } else { btn.textContent = '❌ ' + (data.error || 'Failed'); btn.disabled = false; }
+      } catch(e) { btn.textContent = '❌ Error'; btn.disabled = false; }
+    }
+  </script>
+</body></html>`);
+});
+
+// ─── Remind events API ────────────────────────────────────────────────────────
+app.get('/api/remind-events', requireAuth, async (req, res) => {
+  try {
+    const { getPersonalReminderEvents } = require('./calendar');
+    const { wasAlreadySent } = require('./sent-events');
+    const start = new Date(); start.setHours(0, 0, 0, 0);
+    const end = new Date(start); end.setDate(end.getDate() + 7);
+    const events = await getPersonalReminderEvents(start, end);
+    res.json({ ok: true, events: events.map(e => ({
+      id: e.id,
+      title: e.title,
+      date: e.startTime.toLocaleDateString('he-IL', { weekday: 'short', day: '2-digit', month: '2-digit', timeZone: 'Asia/Jerusalem' }),
+      time: e.timeString,
+      sent: {
+        day_before:  wasAlreadySent(e.id, 'personal_day_before'),
+        thirty_min:  wasAlreadySent(e.id, 'personal_30min'),
+      },
+    })) });
+  } catch (e) {
+    res.json({ ok: false, error: e.message });
+  }
 });
 
 // ─── Upcoming sessions (calendar preview) ────────────────────────────────────
