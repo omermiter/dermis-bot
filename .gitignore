@@ -1,4 +1,5 @@
 node_modules/
+!icon.png
 .env
 google-credentials.json
 google-credentials.json.json

@@ -222,9 +222,21 @@ app.get('/icon.svg', (req, res) => {
   res.send(OCD_SVG_SQUARE);
 });
 
-// Apple touch icon — SVG rendered to PNG via canvas if available, else redirect
-app.get('/apple-touch-icon.png', (req, res) => res.redirect('/icon.svg'));
-app.get('/favicon.ico', (req, res) => res.redirect('/icon.svg'));
+// Serve exact PNG logo for apple-touch-icon and favicon
+app.get('/apple-touch-icon.png', (req, res) => {
+  const p = require('path').resolve('./icon.png');
+  if (require('fs').existsSync(p)) {
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    res.sendFile(p);
+  } else {
+    res.redirect('/icon.svg');
+  }
+});
+app.get('/favicon.ico', (req, res) => {
+  const p = require('path').resolve('./icon.png');
+  if (require('fs').existsSync(p)) res.sendFile(p);
+  else res.redirect('/icon.svg');
+});
 
 // ─── PWA manifest ────────────────────────────────────────────────────────────
 app.get('/manifest.json', (req, res) => {
