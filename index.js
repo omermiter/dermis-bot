@@ -4,7 +4,8 @@
 require('dotenv').config();
 const cron = require('node-cron');
 const {
-  getTodaySessions, getTomorrowSessions, getSessionsFromDaysAgo, getSessionsInRange, getPersonalReminderEvents
+  getTodaySessions, getTomorrowSessions, getSessionsFromDaysAgo, getSessionsInRange,
+  getPersonalReminderEvents, getContentEvents,
 } = require('./calendar');
 const { sendToClient, sendToArtistTemplate } = require('./whatsapp');
 const messages = require('./messages');
@@ -219,6 +220,43 @@ async function runJob_personal30MinReminders() {
   } catch (e) { log(`❌ Personal 30-min reminders error: ${e.message}`); }
 }
 
+// ════════════════════════════════════════════════════════════════════════════
+// CONTENT REMINDERS — BOT_TEMPLATE events in Google Calendar
+// ════════════════════════════════════════════════════════════════════════════
+
+async function runJob_contentDayBeforeReminders() {
+  try {
+    if (!process.env.TEMPLATE_SID_PERSONAL_REMINDER_DAY) return;
+    const start = new Date(); start.setDate(start.getDate() + 1); start.setHours(0, 0, 0, 0);
+    const end = new Date(start); end.setHours(23, 59, 59, 999);
+    const events = await getContentEvents(start, end);
+    for (const event of events) {
+      if (wasAlreadySent(event.id, 'content_day_before')) continue;
+      const label = event.account ? `${event.botLabel} · ${event.account}` : event.botLabel;
+      const result = await sendToArtistTemplate(process.env.TEMPLATE_SID_PERSONAL_REMINDER_DAY, { 1: label, 2: event.timeString });
+      if (result.success) { markSent(event.id, 'content_day_before'); log(`📸 Content day-before reminder: ${event.botLabel}`); }
+      else log(`⚠️ Content day-before reminder FAILED: ${result.error}`);
+    }
+  } catch (e) { log(`❌ Content day-before reminders error: ${e.message}`); }
+}
+
+async function runJob_content30MinReminders() {
+  try {
+    if (!process.env.TEMPLATE_SID_PERSONAL_REMINDER_30MIN) return;
+    const now = new Date();
+    const from = new Date(now.getTime() + 20 * 60 * 1000);
+    const to   = new Date(now.getTime() + 40 * 60 * 1000);
+    const events = await getContentEvents(from, to);
+    for (const event of events) {
+      if (wasAlreadySent(event.id, 'content_30min')) continue;
+      const label = event.account ? `${event.botLabel} · ${event.account}` : event.botLabel;
+      const result = await sendToArtistTemplate(process.env.TEMPLATE_SID_PERSONAL_REMINDER_30MIN, { 1: label, 2: event.timeString });
+      if (result.success) { markSent(event.id, 'content_30min'); log(`📸 Content 30-min reminder: ${event.botLabel}`); }
+      else log(`⚠️ Content 30-min reminder FAILED: ${result.error}`);
+    }
+  } catch (e) { log(`❌ Content 30-min reminders error: ${e.message}`); }
+}
+
 async function runWeeklyCleanup() {
   log('🧹 Running weekly data cleanup...');
   const r1 = pruneOldReplies(30);    // drop read replies older than 30 days
@@ -246,6 +284,10 @@ cron.schedule('0 */6 * * *', refreshClientPhoneMap, { timezone: 'Asia/Jerusalem'
 // Personal reminders — day-before at 09:00, 30-min check every 10 minutes
 cron.schedule('0 9 * * *',    runJob_personalDayBeforeReminders, { timezone: 'Asia/Jerusalem' });
 cron.schedule('*/10 * * * *', runJob_personal30MinReminders,     { timezone: 'Asia/Jerusalem' });
+
+// Content reminders (BOT_TEMPLATE events) — same schedule
+cron.schedule('0 9 * * *',    runJob_contentDayBeforeReminders,  { timezone: 'Asia/Jerusalem' });
+cron.schedule('*/10 * * * *', runJob_content30MinReminders,      { timezone: 'Asia/Jerusalem' });
 
 // Weekly cleanup — every Sunday at 03:00
 cron.schedule('0 3 * * 0', runWeeklyCleanup, { timezone: 'Asia/Jerusalem' });

@@ -902,6 +902,11 @@ app.get('/schedule', requireAuth, (req, res) => {
       <div id="remind-body"><div class="shimmer" style="height:18px;margin-bottom:10px;"></div><div class="shimmer" style="height:18px;width:60%;"></div></div>
     </div>
 
+    <div class="card">
+      <div class="card-title">📸 This week — content schedule</div>
+      <div id="content-body"><div class="shimmer" style="height:18px;margin-bottom:10px;"></div><div class="shimmer" style="height:18px;width:70%;"></div></div>
+    </div>
+
     <button class="btn" style="width:100%;" onclick="location.reload()">↻ Refresh</button>
   </div>
   <script>
@@ -962,6 +967,32 @@ app.get('/schedule', requireAuth, (req, res) => {
           }).join('');
         }
       } catch(e) { rbox.innerHTML = '<span style="font-size:13px;color:#A32D2D;">❌ Failed to load reminders.</span>'; }
+
+      // ── Content schedule ──
+      const cbox = document.getElementById('content-body');
+      try {
+        const r = await fetch('/api/content-events');
+        const data = await r.json();
+        if (!data.ok) { cbox.innerHTML = '<span style="font-size:13px;color:#A32D2D;">❌ ' + data.error + '</span>'; }
+        else if (data.events.length === 0) {
+          cbox.innerHTML = '<span style="font-size:13px;color:var(--text2);">No content events this week.</span>';
+        } else {
+          const ss = 'font-size:11px;padding:2px 7px;border-radius:20px;background:rgba(34,197,94,.12);color:#22c55e;border:1px solid rgba(34,197,94,.25);';
+          const us = 'font-size:11px;padding:2px 7px;border-radius:20px;background:#1f1f1f;color:#555;border:1px solid #2a2a2a;';
+          cbox.innerHTML = data.events.map((e, i) => \`
+            <div class="job-row" style="flex-direction:column;align-items:flex-start;gap:6px;animation:fadeUp .4s var(--ease) both;animation-delay:\${i*50}ms;">
+              <div style="display:flex;justify-content:space-between;width:100%;align-items:center;">
+                <div class="job-label">\${e.botLabel}\${e.account ? ' <span style=\\"font-size:11px;color:var(--accent-light);\\">' + e.account + '</span>' : ''}</div>
+                <div style="font-size:11px;color:var(--text3);">\${e.date} · \${e.time}</div>
+              </div>
+              <div style="display:flex;gap:4px;">
+                <span style="\${e.sent.day_before ? ss : us}">\${e.sent.day_before ? '✅' : '⬜'} Day before</span>
+                <span style="\${e.sent.thirty_min ? ss : us}">\${e.sent.thirty_min ? '✅' : '⬜'} 30 min</span>
+              </div>
+            </div>
+          \`).join('');
+        }
+      } catch(e) { cbox.innerHTML = '<span style="font-size:13px;color:#A32D2D;">❌ Failed to load content schedule.</span>'; }
     })();
 
     async function sendManually(btn, payload) {
@@ -1005,6 +1036,29 @@ app.get('/api/remind-events', requireAuth, async (req, res) => {
   } catch (e) {
     res.json({ ok: false, error: e.message });
   }
+});
+
+// ─── Content events API ──────────────────────────────────────────────────────
+app.get('/api/content-events', requireAuth, async (req, res) => {
+  try {
+    const { getContentEvents } = require('./calendar');
+    const { wasAlreadySent } = require('./sent-events');
+    const start = new Date(); start.setHours(0, 0, 0, 0);
+    const end = new Date(start); end.setDate(end.getDate() + 7);
+    const events = await getContentEvents(start, end);
+    res.json({ ok: true, events: events.map(e => ({
+      id: e.id,
+      title: e.title,
+      botLabel: e.botLabel,
+      account: e.account,
+      date: e.startTime.toLocaleDateString('he-IL', { weekday: 'short', day: '2-digit', month: '2-digit', timeZone: 'Asia/Jerusalem' }),
+      time: e.timeString,
+      sent: {
+        day_before: wasAlreadySent(e.id, 'content_day_before'),
+        thirty_min: wasAlreadySent(e.id, 'content_30min'),
+      },
+    })) });
+  } catch (e) { res.json({ ok: false, error: e.message }); }
 });
 
 // ─── Upcoming sessions (calendar preview) ────────────────────────────────────
