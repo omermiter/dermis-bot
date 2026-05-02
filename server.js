@@ -19,6 +19,33 @@ const { createSession, destroySession, checkPassword, requireAuth } = require('.
 const { sendToArtistTemplate, sendToArtist } = require('./whatsapp');
 const crypto = require('crypto');
 
+// ─── WebAuthn (Face ID / Passkeys) ───────────────────────────────────────────
+const {
+  generateRegistrationOptions, verifyRegistrationResponse,
+  generateAuthenticationOptions, verifyAuthenticationResponse,
+} = require('@simplewebauthn/server');
+const passkeys = require('./passkeys');
+
+function getRpId() {
+  try { return new URL(process.env.BOT_URL || 'http://localhost').hostname; }
+  catch { return 'localhost'; }
+}
+function getOrigin() {
+  const u = process.env.BOT_URL || 'http://localhost:3000';
+  return u.endsWith('/') ? u.slice(0, -1) : u;
+}
+
+const webAuthnChallenges = new Map(); // token → { challenge, expiresAt }
+function storeChallenge(token, challenge) {
+  webAuthnChallenges.set(token, { challenge, expiresAt: Date.now() + 5 * 60 * 1000 });
+}
+function consumeChallenge(token) {
+  const entry = webAuthnChallenges.get(token);
+  if (!entry || Date.now() > entry.expiresAt) { webAuthnChallenges.delete(token); return null; }
+  webAuthnChallenges.delete(token);
+  return entry.challenge;
+}
+
 // ─── Trusted device store ────────────────────────────────────────────────────
 const DEVICE_DURATION = 30 * 24 * 60 * 60 * 1000; // 30 days
 const trustedDevices = new Map();
@@ -198,6 +225,93 @@ const HEADER = (active = '') => `
 </div>
 `;
 
+// ─── WebAuthn routes ─────────────────────────────────────────────────────────
+
+// Start registration (must be logged in already)
+app.post('/webauthn/register/start', requireAuth, async (req, res) => {
+  try {
+    const options = await generateRegistrationOptions({
+      rpName: 'DERMIS Studio',
+      rpID: getRpId(),
+      userID: new TextEncoder().encode('artist'),
+      userName: 'omer',
+      attestationType: 'none',
+      excludeCredentials: passkeys.getAll().map(c => ({ id: c.id, type: 'public-key' })),
+      authenticatorSelection: { authenticatorAttachment: 'platform', userVerification: 'required', residentKey: 'preferred' },
+    });
+    storeChallenge('reg', options.challenge);
+    res.json(options);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Finish registration
+app.post('/webauthn/register/finish', requireAuth, async (req, res) => {
+  const challenge = consumeChallenge('reg');
+  if (!challenge) return res.status(400).json({ error: 'Challenge expired' });
+  try {
+    const verification = await verifyRegistrationResponse({
+      response: req.body,
+      expectedChallenge: challenge,
+      expectedOrigin: getOrigin(),
+      expectedRPID: getRpId(),
+      requireUserVerification: true,
+    });
+    if (!verification.verified) return res.status(400).json({ error: 'Verification failed' });
+    const { credentialID, credentialPublicKey, counter } = verification.registrationInfo;
+    passkeys.save({
+      id: Buffer.from(credentialID).toString('base64url'),
+      publicKey: Buffer.from(credentialPublicKey).toString('base64'),
+      counter,
+      createdAt: new Date().toISOString(),
+    });
+    res.json({ ok: true });
+  } catch (e) { res.status(400).json({ error: e.message }); }
+});
+
+// Start authentication (public — for login)
+app.post('/webauthn/auth/start', async (req, res) => {
+  try {
+    const options = await generateAuthenticationOptions({
+      rpID: getRpId(),
+      allowCredentials: passkeys.getAll().map(c => ({ id: c.id, type: 'public-key' })),
+      userVerification: 'required',
+    });
+    storeChallenge('auth', options.challenge);
+    res.json(options);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Finish authentication (public — for login)
+app.post('/webauthn/auth/finish', async (req, res) => {
+  const challenge = consumeChallenge('auth');
+  if (!challenge) return res.status(400).json({ error: 'Challenge expired' });
+  const cred = passkeys.getById(req.body.id);
+  if (!cred) return res.status(400).json({ error: 'Unknown credential' });
+  try {
+    const verification = await verifyAuthenticationResponse({
+      response: req.body,
+      expectedChallenge: challenge,
+      expectedOrigin: getOrigin(),
+      expectedRPID: getRpId(),
+      credential: {
+        id: cred.id,
+        publicKey: Buffer.from(cred.publicKey, 'base64'),
+        counter: cred.counter,
+      },
+      requireUserVerification: true,
+    });
+    if (!verification.verified) return res.status(400).json({ error: 'Verification failed' });
+    cred.counter = verification.authenticationInfo.newCounter;
+    passkeys.save(cred);
+    const sessionToken = createSession();
+    const deviceToken = createDeviceToken();
+    const opts = { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', maxAge: 30 * 24 * 60 * 60 * 1000 };
+    res.cookie('dermis_session', sessionToken, opts);
+    res.cookie('dermis_device', deviceToken, opts);
+    res.json({ ok: true });
+  } catch (e) { res.status(400).json({ error: e.message }); }
+});
+
 // ─── App icon (OCD logo) ─────────────────────────────────────────────────────
 const OCD_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 900">
   <rect width="500" height="900" fill="#000"/>
@@ -340,6 +454,11 @@ app.get('/login', (req, res) => {
     button:hover{background:#6D28D9;}
     button:active{background:#5B21B6;transform:scale(.98);}
     .error{background:rgba(239,68,68,.1);color:#ef4444;border:1px solid rgba(239,68,68,.2);padding:12px;border-radius:10px;font-size:12px;text-align:center;margin-bottom:20px;animation:slideDown .3s cubic-bezier(0.16,1,0.3,1);}
+    .divider{display:flex;align-items:center;gap:12px;margin:20px 0;color:#333;font-size:11px;letter-spacing:.5px;}
+    .divider::before,.divider::after{content:'';flex:1;height:1px;background:#1f1f1f;}
+    .faceid-btn{width:100%;padding:14px;background:transparent;color:#9B6DFF;border:1px solid #3d2a6e;border-radius:12px;font-size:15px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:8px;}
+    .faceid-btn:hover{background:rgba(124,58,237,.1);border-color:#7C3AED;}
+    .faceid-btn:active{transform:scale(.98);}
     @keyframes fadeUp{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:translateY(0)}}
     @keyframes slideDown{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
     .card{animation:fadeUp .5s cubic-bezier(0.16,1,0.3,1) both;}
@@ -354,6 +473,30 @@ app.get('/login', (req, res) => {
     <input type="hidden" name="returnTo" value="${escHtml(returnTo)}">
     <button type="submit">Sign in</button>
   </form>
+  <script type="module">
+    import { startAuthentication } from 'https://unpkg.com/@simplewebauthn/browser@latest/dist/bundle/index.esm.min.js';
+    async function faceId() {
+      try {
+        const opts = await fetch('/webauthn/auth/start', { method: 'POST' }).then(r => r.json());
+        if (opts.error) return;
+        const assertion = await startAuthentication({ optionsJSON: opts });
+        const res = await fetch('/webauthn/auth/finish', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(assertion) }).then(r => r.json());
+        if (res.ok) location.href = '/inbox';
+        else document.getElementById('fi-err').style.display = 'block';
+      } catch(e) { if (e.name !== 'NotAllowedError') document.getElementById('fi-err').style.display = 'block'; }
+    }
+    if (window.PublicKeyCredential) {
+      PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable().then(ok => {
+        if (ok) document.getElementById('faceid-section').style.display = 'block';
+      });
+    }
+    document.getElementById('fi-btn')?.addEventListener('click', faceId);
+  </script>
+  <div id="faceid-section" style="display:none;max-width:360px;margin:0 auto;padding:0 24px 24px;">
+    <div class="divider">OR</div>
+    <button class="faceid-btn" id="fi-btn">🔐 Sign in with Face ID</button>
+    <div id="fi-err" style="display:none;color:#ef4444;font-size:12px;text-align:center;margin-top:10px;">Face ID failed — try password</div>
+  </div>
 </body></html>`);
 });
 
@@ -514,6 +657,28 @@ app.get('/inbox', requireAuth, (req, res) => {
 </head><body>
   ${HEADER('inbox')}
   <div class="container">
+    ${passkeys.getAll().length === 0 ? `
+    <div id="faceid-prompt" style="background:var(--accent-bg);border:1px solid rgba(124,58,237,.3);border-radius:12px;padding:14px 16px;margin-bottom:12px;display:flex;align-items:center;gap:12px;animation:fadeUp .4s var(--ease) both;">
+      <div style="flex:1;"><div style="font-size:13px;font-weight:600;color:var(--accent-light);margin-bottom:2px;">Enable Face ID login</div><div style="font-size:12px;color:var(--text2);">Skip password next time — sign in with just your face.</div></div>
+      <button onclick="registerFaceId()" style="background:var(--accent);color:#fff;border:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;transition:all .2s;" id="fi-reg-btn">Set up</button>
+      <button onclick="document.getElementById('faceid-prompt').remove()" style="background:transparent;border:none;color:var(--text3);font-size:18px;cursor:pointer;padding:0 4px;">✕</button>
+    </div>
+    <script type="module">
+      import { startRegistration } from 'https://unpkg.com/@simplewebauthn/browser@latest/dist/bundle/index.esm.min.js';
+      window.registerFaceId = async function() {
+        const btn = document.getElementById('fi-reg-btn');
+        btn.textContent = '...'; btn.disabled = true;
+        try {
+          const opts = await fetch('/webauthn/register/start', { method: 'POST' }).then(r => r.json());
+          const cred = await startRegistration({ optionsJSON: opts });
+          const res = await fetch('/webauthn/register/finish', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cred) }).then(r => r.json());
+          if (res.ok) { document.getElementById('faceid-prompt').innerHTML = '<div style="color:var(--success);font-size:13px;font-weight:500;">✅ Face ID enabled — you can now sign in with your face!</div>'; setTimeout(() => document.getElementById('faceid-prompt')?.remove(), 3000); }
+          else { btn.textContent = 'Set up'; btn.disabled = false; }
+        } catch(e) { btn.textContent = 'Set up'; btn.disabled = false; }
+      };
+      if (!window.PublicKeyCredential) document.getElementById('faceid-prompt')?.remove();
+      else PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable().then(ok => { if (!ok) document.getElementById('faceid-prompt')?.remove(); });
+    </script>` : ''}
     <div class="actions">
       <span class="badge ${unread === 0 ? 'zero' : ''}">${unread === 0 ? 'All read' : unread + ' unread'}</span>
       <div style="flex:1;"></div>

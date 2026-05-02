@@ -4,12 +4,13 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-     "start": "node setup-creds.js && node index.js"
+    "start": "node setup-creds.js && node index.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@simplewebauthn/server": "^13.3.0",
     "cookie-parser": "^1.4.7",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
