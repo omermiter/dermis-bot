@@ -4,9 +4,9 @@
 require('dotenv').config();
 const cron = require('node-cron');
 const {
-  getTodaySessions, getTomorrowSessions, getSessionsFromDaysAgo, getSessionsInRange
+  getTodaySessions, getTomorrowSessions, getSessionsFromDaysAgo, getSessionsInRange, getPersonalReminderEvents
 } = require('./calendar');
-const { sendToClient } = require('./whatsapp');
+const { sendToClient, sendToArtist } = require('./whatsapp');
 const messages = require('./messages');
 const { startServer, registerClientPhone, markAwaitingDay7 } = require('./server');
 const pendingReviews = require('./pending-reviews');
@@ -181,6 +181,46 @@ async function runHealthCheck() {
 // WEEKLY CLEANUP — every Sunday at 03:00
 // ════════════════════════════════════════════════════════════════════════════
 
+// ════════════════════════════════════════════════════════════════════════════
+// PERSONAL REMINDERS — for events with "remind" in the description
+// ════════════════════════════════════════════════════════════════════════════
+
+async function runJob_personalDayBeforeReminders() {
+  try {
+    const start = new Date();
+    start.setDate(start.getDate() + 1);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(start);
+    end.setHours(23, 59, 59, 999);
+    const events = await getPersonalReminderEvents(start, end);
+    for (const event of events) {
+      if (wasAlreadySent(event.id, 'personal_day_before')) continue;
+      const result = await sendToArtist(`⏰ תזכורת למחר: ${event.title}\nמחר ב-${event.timeString}`);
+      if (result.success) {
+        markSent(event.id, 'personal_day_before');
+        log(`📅 Personal day-before reminder sent: ${event.title}`);
+      } else log(`⚠️ Personal day-before reminder FAILED: ${result.error}`);
+    }
+  } catch (e) { log(`❌ Personal day-before reminders error: ${e.message}`); }
+}
+
+async function runJob_personal30MinReminders() {
+  try {
+    const now = new Date();
+    const from = new Date(now.getTime() + 20 * 60 * 1000);
+    const to   = new Date(now.getTime() + 40 * 60 * 1000);
+    const events = await getPersonalReminderEvents(from, to);
+    for (const event of events) {
+      if (wasAlreadySent(event.id, 'personal_30min')) continue;
+      const result = await sendToArtist(`⏰ תזכורת: ${event.title}\nמתחיל ב-${event.timeString} (בעוד כ-30 דקות)`);
+      if (result.success) {
+        markSent(event.id, 'personal_30min');
+        log(`📅 Personal 30-min reminder sent: ${event.title}`);
+      } else log(`⚠️ Personal 30-min reminder FAILED: ${result.error}`);
+    }
+  } catch (e) { log(`❌ Personal 30-min reminders error: ${e.message}`); }
+}
+
 async function runWeeklyCleanup() {
   log('🧹 Running weekly data cleanup...');
   const r1 = pruneOldReplies(30);    // drop read replies older than 30 days
@@ -204,6 +244,10 @@ cron.schedule('*/30 * * * *', runHealthCheck, { timezone: 'Asia/Jerusalem' });
 
 // Refresh client phone map every 6 hours
 cron.schedule('0 */6 * * *', refreshClientPhoneMap, { timezone: 'Asia/Jerusalem' });
+
+// Personal reminders — day-before at 09:00, 30-min check every 10 minutes
+cron.schedule('0 9 * * *',    runJob_personalDayBeforeReminders, { timezone: 'Asia/Jerusalem' });
+cron.schedule('*/10 * * * *', runJob_personal30MinReminders,     { timezone: 'Asia/Jerusalem' });
 
 // Weekly cleanup — every Sunday at 03:00
 cron.schedule('0 3 * * 0', runWeeklyCleanup, { timezone: 'Asia/Jerusalem' });
@@ -229,9 +273,10 @@ module.exports = {
   startServer();
   log('');
   log('   Scheduled jobs:');
-  log('   • 09:00 → 24h reminders, day-3 healing check (tracks reply → review request)');
+  log('   • 09:00 → 24h reminders, day-3 healing check, personal day-before reminders');
   log('   • 18:00 → Same-day aftercare instructions');
   log('   • Hourly → Smart review dispatcher');
+  log('   • Every 10 min → Personal 30-min reminders');
   log('   • Every 30 min → Health-check (recovers missed jobs)');
   log('   • Every 6 hours → Refresh client phone map');
   log('   Timezone: Asia/Jerusalem');

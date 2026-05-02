@@ -115,9 +115,31 @@ async function getSessionsFromDaysAgo(days) {
   return getSessionsInRange(start, end);
 }
 
+// Get all events with "remind" in their description within a date range
+async function getPersonalReminderEvents(startDate, endDate) {
+  const calendar = await getCalendarClient();
+  const response = await calendar.events.list({
+    calendarId: process.env.GOOGLE_CALENDAR_ID,
+    timeMin: startDate.toISOString(),
+    timeMax: endDate.toISOString(),
+    singleEvents: true,
+    orderBy: 'startTime',
+  });
+  return (response.data.items || [])
+    .filter(e => (e.description || '').toLowerCase().includes('remind'))
+    .map(e => ({
+      id: e.id,
+      title: e.summary || '(No title)',
+      startTime: new Date(e.start.dateTime || e.start.date),
+      timeString: new Date(e.start.dateTime || e.start.date)
+        .toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jerusalem' }),
+    }));
+}
+
 module.exports = {
   getTodaySessions,
   getTomorrowSessions,
   getSessionsFromDaysAgo,
   getSessionsInRange,
+  getPersonalReminderEvents,
 };
