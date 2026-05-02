@@ -1187,28 +1187,28 @@ app.get('/schedule', requireAuth, (req, res) => {
         }
       } catch(e) { rbox.innerHTML = '<span style="font-size:13px;color:#A32D2D;">❌ Failed to load reminders.</span>'; }
 
-      // ── Content schedule ──
+      // ── Story schedule ──
       const cbox = document.getElementById('content-body');
       try {
-        const r = await fetch('/api/content-events');
+        const r = await fetch('/api/story-events');
         const data = await r.json();
         if (!data.ok) { cbox.innerHTML = '<span style="font-size:13px;color:#A32D2D;">❌ ' + data.error + '</span>'; }
         else if (data.events.length === 0) {
-          cbox.innerHTML = '<span style="font-size:13px;color:var(--text2);">No content events this week.</span>';
+          cbox.innerHTML = '<span style="font-size:13px;color:var(--text2);">No story events this week.</span>';
         } else {
           const ss = 'font-size:11px;padding:2px 7px;border-radius:20px;background:rgba(34,197,94,.12);color:#22c55e;border:1px solid rgba(34,197,94,.25);';
           const us = 'font-size:11px;padding:2px 7px;border-radius:20px;background:#1f1f1f;color:#555;border:1px solid #2a2a2a;';
           cbox.innerHTML = data.events.map((e, i) => \`
             <div class="job-row" style="flex-direction:column;align-items:flex-start;gap:6px;animation:fadeUp .4s var(--ease) both;animation-delay:\${i*50}ms;">
               <div style="display:flex;justify-content:space-between;width:100%;align-items:center;">
-                <div class="job-label">\${e.botLabel}\${e.account ? ' <span style=\\"font-size:11px;color:var(--accent-light);\\">' + e.account + '</span>' : ''}</div>
+                <div class="job-label">\${e.title}</div>
                 <div style="font-size:11px;color:var(--text3);">\${e.date} · \${e.time}</div>
               </div>
               <span style="\${e.sent ? ss : us}">\${e.sent ? '✅ Reminder sent' : '⬜ Reminder pending'}</span>
             </div>
           \`).join('');
         }
-      } catch(e) { cbox.innerHTML = '<span style="font-size:13px;color:#A32D2D;">❌ Failed to load content schedule.</span>'; }
+      } catch(e) { cbox.innerHTML = '<span style="font-size:13px;color:#A32D2D;">❌ Failed to load story schedule.</span>'; }
     })();
 
     async function sendManually(btn, payload) {
@@ -1254,19 +1254,17 @@ app.get('/api/remind-events', requireAuth, async (req, res) => {
   }
 });
 
-// ─── Content events API ──────────────────────────────────────────────────────
-app.get('/api/content-events', requireAuth, async (req, res) => {
+// ─── Story events API ────────────────────────────────────────────────────────
+app.get('/api/story-events', requireAuth, async (req, res) => {
   try {
-    const { getContentEvents } = require('./calendar');
+    const { getStoryEvents } = require('./calendar');
     const { wasAlreadySent } = require('./sent-events');
     const start = new Date(); start.setHours(0, 0, 0, 0);
     const end = new Date(start); end.setDate(end.getDate() + 7);
-    const all = await getContentEvents(start, end);
-    const events = all.filter(e => e.botType.toUpperCase().includes('STORY'));
+    const events = await getStoryEvents(start, end);
     res.json({ ok: true, events: events.map(e => ({
       id: e.id,
-      botLabel: e.botLabel,
-      account: e.account,
+      title: e.title,
       date: e.startTime.toLocaleDateString('he-IL', { weekday: 'short', day: '2-digit', month: '2-digit', timeZone: 'Asia/Jerusalem' }),
       time: e.timeString,
       sent: wasAlreadySent(e.id, 'story_5min'),

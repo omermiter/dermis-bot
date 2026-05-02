@@ -136,33 +136,8 @@ async function getPersonalReminderEvents(startDate, endDate) {
     }));
 }
 
-// Parse BOT_TEMPLATE line from event description
-// e.g. "BOT_TEMPLATE: MORNING_STORY | TYPE=setup_or_archive | ACCOUNT=IG+TT"
-function parseBotTemplate(description) {
-  if (!description) return null;
-  const match = description.match(/BOT_TEMPLATE[:\s]+([^\n\r]+)/i);
-  if (!match) return null;
-  const parts = match[1].split('|').map(p => p.trim());
-  const type = parts[0];
-  const params = {};
-  for (const part of parts.slice(1)) {
-    const eqIdx = part.indexOf('=');
-    if (eqIdx > -1) params[part.slice(0, eqIdx).trim().toLowerCase()] = part.slice(eqIdx + 1).trim();
-  }
-  return { type, ...params };
-}
-
-function formatBotType(type) {
-  return type
-    .replace(/_/g, ' ')
-    .replace(/\b\w/g, c => c.toUpperCase())
-    .replace('Story', 'Story 📸')
-    .replace('Film', 'Film 🎬')
-    .replace('Session', 'Session');
-}
-
-// Get all events with BOT_TEMPLATE in their description
-async function getContentEvents(startDate, endDate) {
+// Get all events containing the word "story" in title or description
+async function getStoryEvents(startDate, endDate) {
   const calendar = await getCalendarClient();
   const response = await calendar.events.list({
     calendarId: process.env.GOOGLE_CALENDAR_ID,
@@ -171,18 +146,14 @@ async function getContentEvents(startDate, endDate) {
     singleEvents: true,
     orderBy: 'startTime',
   });
+  const re = /\bstory\b/i;
   return (response.data.items || [])
-    .filter(e => /BOT_TEMPLATE/i.test(e.description || ''))
+    .filter(e => re.test(e.summary || '') || re.test(e.description || ''))
     .map(e => {
-      const bot = parseBotTemplate(e.description || '');
       const startTime = new Date(e.start.dateTime || e.start.date);
-      const account = bot?.account || '';
       return {
         id: e.id,
         title: e.summary || '(No title)',
-        botType: bot?.type || '',
-        botLabel: bot ? formatBotType(bot.type) : (e.summary || ''),
-        account,
         startTime,
         timeString: startTime.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jerusalem' }),
       };
@@ -195,5 +166,5 @@ module.exports = {
   getSessionsFromDaysAgo,
   getSessionsInRange,
   getPersonalReminderEvents,
-  getContentEvents,
+  getStoryEvents,
 };

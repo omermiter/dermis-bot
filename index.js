@@ -5,7 +5,7 @@ require('dotenv').config();
 const cron = require('node-cron');
 const {
   getTodaySessions, getTomorrowSessions, getSessionsFromDaysAgo, getSessionsInRange,
-  getPersonalReminderEvents, getContentEvents,
+  getPersonalReminderEvents, getStoryEvents,
 } = require('./calendar');
 const { sendToClient, sendToArtistTemplate } = require('./whatsapp');
 const messages = require('./messages');
@@ -230,15 +230,14 @@ async function runJob_storyReminders() {
     const now = new Date();
     const from = new Date(now.getTime() + 2 * 60 * 1000);   // 2 min from now
     const to   = new Date(now.getTime() + 8 * 60 * 1000);   // 8 min from now
-    const events = await getContentEvents(from, to);
-    const stories = events.filter(e => e.botType.toUpperCase().includes('STORY'));
-    for (const event of stories) {
+    const events = await getStoryEvents(from, to);
+    for (const event of events) {
       if (wasAlreadySent(event.id, 'story_5min')) continue;
       const result = await sendToArtistTemplate(
         process.env.TEMPLATE_SID_STORY_REMINDER,
-        { 1: event.botLabel, 2: event.account || '' }
+        { 1: event.title, 2: event.timeString }
       );
-      if (result.success) { markSent(event.id, 'story_5min'); log(`📸 Story reminder sent: ${event.botLabel}`); }
+      if (result.success) { markSent(event.id, 'story_5min'); log(`📸 Story reminder sent: ${event.title}`); }
       else log(`⚠️ Story reminder FAILED: ${result.error}`);
     }
   } catch (e) { log(`❌ Story reminders error: ${e.message}`); }
