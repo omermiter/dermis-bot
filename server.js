@@ -41,9 +41,9 @@ function verifyOtp(token, submitted) {
   return { ok: true, returnTo: entry.returnTo };
 }
 async function sendOtp(otp) {
-  const text = `Your DERMIS login code: ${otp}\nValid for 5 minutes.`;
+  const text = `Your DERMIS login code: ${otp} (valid for 5 minutes)`;
   if (process.env.TEMPLATE_SID_ARTIST_NOTIFICATION) {
-    return sendToArtistTemplate(process.env.TEMPLATE_SID_ARTIST_NOTIFICATION, { 1: 'DERMIS', 2: 'Login OTP', 3: text });
+    return sendToArtistTemplate(process.env.TEMPLATE_SID_ARTIST_NOTIFICATION, { 1: 'DERMIS', 2: 'OTP', 3: text });
   }
   return sendToArtist(text);
 }
