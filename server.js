@@ -31,8 +31,9 @@ function getRpId() {
   catch { return 'localhost'; }
 }
 function getOrigin() {
-  const u = process.env.BOT_URL || 'http://localhost:3000';
-  return u.endsWith('/') ? u.slice(0, -1) : u;
+  try {
+    return new URL(process.env.BOT_URL || 'http://localhost:3000').origin;
+  } catch { return 'http://localhost:3000'; }
 }
 
 const webAuthnChallenges = new Map(); // token → { challenge, expiresAt }
