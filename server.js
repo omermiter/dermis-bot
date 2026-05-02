@@ -41,11 +41,11 @@ function verifyOtp(token, submitted) {
   return { ok: true, returnTo: entry.returnTo };
 }
 async function sendOtp(otp) {
-  const text = `Your DERMIS login code: ${otp} (valid for 5 minutes)`;
-  if (process.env.TEMPLATE_SID_ARTIST_NOTIFICATION) {
-    return sendToArtistTemplate(process.env.TEMPLATE_SID_ARTIST_NOTIFICATION, { 1: 'DERMIS', 2: 'OTP', 3: text });
+  if (!process.env.TEMPLATE_SID_OTP) {
+    console.error('❌ TEMPLATE_SID_OTP not set — cannot send OTP');
+    return { success: false, error: 'TEMPLATE_SID_OTP not configured' };
   }
-  return sendToArtist(text);
+  return sendToArtistTemplate(process.env.TEMPLATE_SID_OTP, { 1: otp });
 }
 
 const app = express();
