@@ -256,12 +256,13 @@ app.post('/webauthn/register/finish', requireAuth, async (req, res) => {
       expectedRPID: getRpId(),
       requireUserVerification: true,
     });
-    if (!verification.verified) return res.status(400).json({ error: 'Verification failed' });
-    const { credentialID, credentialPublicKey, counter } = verification.registrationInfo;
+    if (!verification.verified || !verification.registrationInfo) return res.status(400).json({ error: 'Verification failed' });
+    // v13 shape: registrationInfo.credential = { id, publicKey, counter }
+    const c = verification.registrationInfo.credential;
     passkeys.save({
-      id: Buffer.from(credentialID).toString('base64url'),
-      publicKey: Buffer.from(credentialPublicKey).toString('base64'),
-      counter,
+      id: typeof c.id === 'string' ? c.id : Buffer.from(c.id).toString('base64url'),
+      publicKey: Buffer.from(c.publicKey).toString('base64'),
+      counter: c.counter,
       createdAt: new Date().toISOString(),
     });
     res.json({ ok: true });
@@ -473,24 +474,33 @@ app.get('/login', (req, res) => {
     <input type="hidden" name="returnTo" value="${escHtml(returnTo)}">
     <button type="submit">Sign in</button>
   </form>
-  <script type="module">
-    import { startAuthentication } from 'https://unpkg.com/@simplewebauthn/browser@latest/dist/bundle/index.esm.min.js';
-    async function faceId() {
-      try {
-        const opts = await fetch('/webauthn/auth/start', { method: 'POST' }).then(r => r.json());
-        if (opts.error) return;
-        const assertion = await startAuthentication({ optionsJSON: opts });
-        const res = await fetch('/webauthn/auth/finish', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(assertion) }).then(r => r.json());
-        if (res.ok) location.href = '/inbox';
-        else document.getElementById('fi-err').style.display = 'block';
-      } catch(e) { if (e.name !== 'NotAllowedError') document.getElementById('fi-err').style.display = 'block'; }
-    }
-    if (window.PublicKeyCredential) {
-      PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable().then(ok => {
-        if (ok) document.getElementById('faceid-section').style.display = 'block';
+  <script src="https://unpkg.com/@simplewebauthn/browser@13/dist/bundle/index.umd.min.js"></script>
+  <script>
+    (function(){
+      if (!window.PublicKeyCredential || !window.SimpleWebAuthnBrowser) return;
+      PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable().then(function(ok){
+        if (!ok) return;
+        var section = document.getElementById('faceid-section');
+        if (section) section.style.display = 'block';
+        var btn = document.getElementById('fi-btn');
+        if (!btn) return;
+        btn.addEventListener('click', async function(){
+          try {
+            var optsRes = await fetch('/webauthn/auth/start', { method: 'POST' });
+            var opts = await optsRes.json();
+            if (opts.error) throw new Error(opts.error);
+            var assertion = await SimpleWebAuthnBrowser.startAuthentication({ optionsJSON: opts });
+            var finishRes = await fetch('/webauthn/auth/finish', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(assertion) });
+            var data = await finishRes.json();
+            if (data.ok) location.href = '/inbox';
+            else { document.getElementById('fi-err').textContent = '❌ ' + (data.error || 'Face ID failed'); document.getElementById('fi-err').style.display = 'block'; }
+          } catch(e) {
+            console.error('Face ID error:', e);
+            if (e.name !== 'NotAllowedError') { document.getElementById('fi-err').textContent = '❌ ' + e.message; document.getElementById('fi-err').style.display = 'block'; }
+          }
+        });
       });
-    }
-    document.getElementById('fi-btn')?.addEventListener('click', faceId);
+    })();
   </script>
   <div id="faceid-section" style="display:none;max-width:360px;margin:0 auto;padding:0 24px 24px;">
     <div class="divider">OR</div>
@@ -658,26 +668,49 @@ app.get('/inbox', requireAuth, (req, res) => {
   ${HEADER('inbox')}
   <div class="container">
     ${passkeys.getAll().length === 0 ? `
-    <div id="faceid-prompt" style="background:var(--accent-bg);border:1px solid rgba(124,58,237,.3);border-radius:12px;padding:14px 16px;margin-bottom:12px;display:flex;align-items:center;gap:12px;animation:fadeUp .4s var(--ease) both;">
-      <div style="flex:1;"><div style="font-size:13px;font-weight:600;color:var(--accent-light);margin-bottom:2px;">Enable Face ID login</div><div style="font-size:12px;color:var(--text2);">Skip password next time — sign in with just your face.</div></div>
-      <button onclick="registerFaceId()" style="background:var(--accent);color:#fff;border:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;transition:all .2s;" id="fi-reg-btn">Set up</button>
-      <button onclick="document.getElementById('faceid-prompt').remove()" style="background:transparent;border:none;color:var(--text3);font-size:18px;cursor:pointer;padding:0 4px;">✕</button>
+    <div id="faceid-prompt" style="background:var(--accent-bg);border:1px solid rgba(124,58,237,.3);border-radius:12px;padding:14px 16px;margin-bottom:12px;display:none;align-items:center;gap:12px;animation:fadeUp .4s var(--ease) both;">
+      <div style="flex:1;"><div style="font-size:13px;font-weight:600;color:var(--accent-light);margin-bottom:2px;">Enable Face ID login</div><div style="font-size:12px;color:var(--text2);" id="fi-msg">Skip password next time — sign in with just your face.</div></div>
+      <button id="fi-reg-btn" style="background:var(--accent);color:#fff;border:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;transition:all .2s;">Set up</button>
+      <button id="fi-dismiss" style="background:transparent;border:none;color:var(--text3);font-size:18px;cursor:pointer;padding:0 4px;">✕</button>
     </div>
-    <script type="module">
-      import { startRegistration } from 'https://unpkg.com/@simplewebauthn/browser@latest/dist/bundle/index.esm.min.js';
-      window.registerFaceId = async function() {
-        const btn = document.getElementById('fi-reg-btn');
-        btn.textContent = '...'; btn.disabled = true;
-        try {
-          const opts = await fetch('/webauthn/register/start', { method: 'POST' }).then(r => r.json());
-          const cred = await startRegistration({ optionsJSON: opts });
-          const res = await fetch('/webauthn/register/finish', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cred) }).then(r => r.json());
-          if (res.ok) { document.getElementById('faceid-prompt').innerHTML = '<div style="color:var(--success);font-size:13px;font-weight:500;">✅ Face ID enabled — you can now sign in with your face!</div>'; setTimeout(() => document.getElementById('faceid-prompt')?.remove(), 3000); }
-          else { btn.textContent = 'Set up'; btn.disabled = false; }
-        } catch(e) { btn.textContent = 'Set up'; btn.disabled = false; }
-      };
-      if (!window.PublicKeyCredential) document.getElementById('faceid-prompt')?.remove();
-      else PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable().then(ok => { if (!ok) document.getElementById('faceid-prompt')?.remove(); });
+    <script src="https://unpkg.com/@simplewebauthn/browser@13/dist/bundle/index.umd.min.js"></script>
+    <script>
+      (function(){
+        var prompt = document.getElementById('faceid-prompt');
+        if (!prompt) return;
+        if (!window.PublicKeyCredential) return;
+        if (!window.SimpleWebAuthnBrowser) { console.warn('SimpleWebAuthnBrowser failed to load'); return; }
+        PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable().then(function(ok){
+          if (!ok) return;
+          prompt.style.display = 'flex';
+          document.getElementById('fi-dismiss').addEventListener('click', function(){ prompt.remove(); });
+          document.getElementById('fi-reg-btn').addEventListener('click', async function(){
+            var btn = this;
+            var msg = document.getElementById('fi-msg');
+            btn.textContent = '...'; btn.disabled = true;
+            try {
+              var optsRes = await fetch('/webauthn/register/start', { method: 'POST' });
+              var opts = await optsRes.json();
+              if (opts.error) throw new Error(opts.error);
+              var cred = await SimpleWebAuthnBrowser.startRegistration({ optionsJSON: opts });
+              var finishRes = await fetch('/webauthn/register/finish', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cred) });
+              var data = await finishRes.json();
+              if (data.ok) {
+                prompt.innerHTML = '<div style="color:var(--success);font-size:13px;font-weight:500;">✅ Face ID enabled — you can now sign in with your face!</div>';
+                setTimeout(function(){ prompt.remove(); }, 3000);
+              } else {
+                msg.textContent = '❌ ' + (data.error || 'Failed');
+                msg.style.color = 'var(--error)';
+                btn.textContent = 'Try again'; btn.disabled = false;
+              }
+            } catch(e) {
+              console.error('Face ID register error:', e);
+              if (e.name !== 'NotAllowedError') { msg.textContent = '❌ ' + e.message; msg.style.color = 'var(--error)'; }
+              btn.textContent = 'Try again'; btn.disabled = false;
+            }
+          });
+        });
+      })();
     </script>` : ''}
     <div class="actions">
       <span class="badge ${unread === 0 ? 'zero' : ''}">${unread === 0 ? 'All read' : unread + ' unread'}</span>
