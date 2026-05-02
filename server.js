@@ -47,19 +47,43 @@ function consumeChallenge(token) {
   return entry.challenge;
 }
 
-// ─── Trusted device store ────────────────────────────────────────────────────
+// ─── Trusted device store (persisted to DATA_DIR) ────────────────────────────
 const DEVICE_DURATION = 30 * 24 * 60 * 60 * 1000; // 30 days
-const trustedDevices = new Map();
+const path = require('path');
+const DATA_DIR = process.env.DATA_DIR || '.';
+fs.mkdirSync(DATA_DIR, { recursive: true });
+const DEVICES_FILE = path.resolve(DATA_DIR, 'trusted-devices.json');
+
+function loadDevices() {
+  try {
+    if (fs.existsSync(DEVICES_FILE)) {
+      const raw = JSON.parse(fs.readFileSync(DEVICES_FILE, 'utf8'));
+      const now = Date.now();
+      // Filter out expired tokens on load
+      return new Map(Object.entries(raw).filter(([, exp]) => exp > now));
+    }
+  } catch (e) { console.warn('Could not load trusted devices:', e.message); }
+  return new Map();
+}
+
+function persistDevices(map) {
+  try { fs.writeFileSync(DEVICES_FILE, JSON.stringify(Object.fromEntries(map), null, 2)); }
+  catch (e) { console.warn('Could not save trusted devices:', e.message); }
+}
+
+const trustedDevices = loadDevices();
+
 function createDeviceToken() {
   const token = crypto.randomBytes(32).toString('hex');
   trustedDevices.set(token, Date.now() + DEVICE_DURATION);
+  persistDevices(trustedDevices);
   return token;
 }
 function isValidDevice(token) {
   if (!token) return false;
   const expiry = trustedDevices.get(token);
   if (!expiry) return false;
-  if (Date.now() > expiry) { trustedDevices.delete(token); return false; }
+  if (Date.now() > expiry) { trustedDevices.delete(token); persistDevices(trustedDevices); return false; }
   return true;
 }
 
