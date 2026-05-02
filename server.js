@@ -148,7 +148,9 @@ const HEAD_TAGS = `
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="DERMIS">
   <meta name="theme-color" content="#080808">
-  <link rel="manifest" href="/manifest.json">`;
+  <link rel="manifest" href="/manifest.json">
+  <link rel="icon" type="image/svg+xml" href="/icon.svg">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">`;
 
 const IOS_PWA_BANNER = `
 <style>#pwa-banner{animation:slideUp .5s cubic-bezier(0.16,1,0.3,1) both;}</style>
@@ -180,6 +182,50 @@ const HEADER = (active = '') => `
 </div>
 `;
 
+// ─── App icon (OCD logo) ─────────────────────────────────────────────────────
+const OCD_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 900">
+  <rect width="500" height="900" fill="#000"/>
+  <text x="250" y="245" text-anchor="middle"
+    font-family="Georgia,'Times New Roman',serif"
+    font-size="240" font-weight="300"
+    fill="none" stroke="#C67DFF" stroke-width="7" paint-order="stroke">O</text>
+  <text x="250" y="555" text-anchor="middle"
+    font-family="Georgia,'Times New Roman',serif"
+    font-size="240" font-weight="300"
+    fill="none" stroke="#C67DFF" stroke-width="7" paint-order="stroke">C</text>
+  <text x="250" y="855" text-anchor="middle"
+    font-family="Georgia,'Times New Roman',serif"
+    font-size="240" font-weight="300"
+    fill="none" stroke="#C67DFF" stroke-width="7" paint-order="stroke">D</text>
+</svg>`;
+
+// Square version for favicon/icon use
+const OCD_SVG_SQUARE = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" fill="#000"/>
+  <text x="256" y="135" text-anchor="middle"
+    font-family="Georgia,'Times New Roman',serif"
+    font-size="140" font-weight="300"
+    fill="none" stroke="#C67DFF" stroke-width="5" paint-order="stroke">O</text>
+  <text x="256" y="305" text-anchor="middle"
+    font-family="Georgia,'Times New Roman',serif"
+    font-size="140" font-weight="300"
+    fill="none" stroke="#C67DFF" stroke-width="5" paint-order="stroke">C</text>
+  <text x="256" y="470" text-anchor="middle"
+    font-family="Georgia,'Times New Roman',serif"
+    font-size="140" font-weight="300"
+    fill="none" stroke="#C67DFF" stroke-width="5" paint-order="stroke">D</text>
+</svg>`;
+
+app.get('/icon.svg', (req, res) => {
+  res.setHeader('Content-Type', 'image/svg+xml');
+  res.setHeader('Cache-Control', 'public, max-age=86400');
+  res.send(OCD_SVG_SQUARE);
+});
+
+// Apple touch icon — SVG rendered to PNG via canvas if available, else redirect
+app.get('/apple-touch-icon.png', (req, res) => res.redirect('/icon.svg'));
+app.get('/favicon.ico', (req, res) => res.redirect('/icon.svg'));
+
 // ─── PWA manifest ────────────────────────────────────────────────────────────
 app.get('/manifest.json', (req, res) => {
   res.json({
@@ -188,9 +234,12 @@ app.get('/manifest.json', (req, res) => {
     description: 'Studio assistant for tattoo appointments',
     start_url: '/inbox',
     display: 'standalone',
-    background_color: '#080808',
-    theme_color: '#080808',
+    background_color: '#000000',
+    theme_color: '#000000',
     orientation: 'portrait',
+    icons: [
+      { src: '/icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any maskable' },
+    ],
   });
 });
 
