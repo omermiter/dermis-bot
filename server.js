@@ -14,6 +14,7 @@ const fs = require('fs');
 const { addReply, markRead, markAllRead, getReplies, unreadCount } = require('./replies-store');
 const { analyze } = require('./sentiment');
 const pendingReviews = require('./pending-reviews');
+const awaitingReplies = require('./awaiting-replies');
 const messages = require('./messages');
 const { createSession, destroySession, checkPassword, requireAuth } = require('./auth');
 const { sendToArtistTemplate, sendToArtist } = require('./whatsapp');
@@ -132,16 +133,9 @@ function lookupName(from) {
   return phoneToName.get(clean) || phoneToName.get(clean.replace('+972', '0')) || 'Unknown client';
 }
 
-// ─── Day-7 awaiting reply tracker (smart trigger) ────────────────────────────
-const awaitingDay7Reply = new Map();
+// ─── Day-3 awaiting reply tracker (smart review trigger) ─────────────────────
 function markAwaitingDay7(phone, firstName, fullName) {
-  awaitingDay7Reply.set(phone, { firstName, fullName, sentAt: Date.now() });
-}
-function cleanupAwaiting() {
-  const fiveDays = 5 * 24 * 60 * 60 * 1000;
-  for (const [phone, data] of awaitingDay7Reply.entries()) {
-    if (Date.now() - data.sentAt > fiveDays) awaitingDay7Reply.delete(phone);
-  }
+  awaitingReplies.markAwaiting(phone, firstName, fullName);
 }
 
 // ─── HTML escape helper ──────────────────────────────────────────────────────
@@ -424,7 +418,7 @@ app.post('/webhook', async (req, res) => {
   const body = req.body.Body || '';
   if (!from || !body) return res.status(200).send('<Response></Response>');
 
-  cleanupAwaiting();
+  awaitingReplies.cleanup();
   const clientName = lookupName(from);
   const rawPhone = from.replace('whatsapp:', '');
   const messageSid = req.body.MessageSid || '';
@@ -442,9 +436,9 @@ app.post('/webhook', async (req, res) => {
     console.log('⚠️ TEMPLATE_SID_ARTIST_NOTIFICATION not set — skipping artist notification');
   }
 
-  const day7Data = awaitingDay7Reply.get(from);
+  const day7Data = awaitingReplies.getAwaiting(from);
   if (day7Data) {
-    awaitingDay7Reply.delete(from);
+    awaitingReplies.deleteAwaiting(from);
     const buttonPayload = req.body.ButtonPayload || '';
     // Button payload takes priority; fall back to text sentiment for free-form replies
     const sentiment = buttonPayload === 'positive' ? 'positive'
