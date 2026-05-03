@@ -19,6 +19,8 @@ const messages = require('./messages');
 const { createSession, destroySession, checkPassword, requireAuth } = require('./auth');
 const { sendToArtistTemplate, sendToArtist } = require('./whatsapp');
 const crypto = require('crypto');
+const webpush = require('web-push');
+const pushSub = require('./push-sub');
 
 // ─── WebAuthn (Face ID / Passkeys) ───────────────────────────────────────────
 const {
@@ -55,6 +57,37 @@ const DATA_DIR = process.env.DATA_DIR || '.';
 fs.mkdirSync(DATA_DIR, { recursive: true });
 const DEVICES_FILE = path.resolve(DATA_DIR, 'trusted-devices.json');
 const { encrypt, decrypt } = require('./encrypt');
+
+// ─── Web Push (VAPID keys auto-generated once, persisted to DATA_DIR) ────────
+const VAPID_FILE = path.resolve(DATA_DIR, 'vapid-keys.json');
+function loadOrGenerateVapid() {
+  try {
+    if (fs.existsSync(VAPID_FILE)) {
+      return JSON.parse(decrypt(fs.readFileSync(VAPID_FILE, 'utf8')));
+    }
+  } catch (e) { console.warn('Could not load VAPID keys:', e.message); }
+  const keys = webpush.generateVAPIDKeys();
+  try { fs.writeFileSync(VAPID_FILE, encrypt(JSON.stringify(keys))); } catch (e) {}
+  console.log('🔑 Generated new VAPID keys for web push');
+  return keys;
+}
+const vapidKeys = loadOrGenerateVapid();
+const vapidContact = (() => {
+  try { return 'mailto:admin@' + new URL(process.env.BOT_URL || 'http://localhost').hostname; }
+  catch { return 'mailto:admin@dermis.local'; }
+})();
+webpush.setVapidDetails(vapidContact, vapidKeys.publicKey, vapidKeys.privateKey);
+
+function sendPushToArtist(title, body, url = '/inbox') {
+  const subs = pushSub.getSubs();
+  if (!subs.length) return;
+  const payload = JSON.stringify({ title, body, icon: '/icon.svg', tag: 'client-reply', data: { url } });
+  for (const sub of subs) {
+    webpush.sendNotification(sub, payload).catch(err => {
+      if (err.statusCode === 404 || err.statusCode === 410) pushSub.removeSub(sub.endpoint);
+    });
+  }
+}
 
 function loadDevices() {
   try {
@@ -238,6 +271,7 @@ const HEADER = (active = '') => `
     </div>
   </div>
   <script>(async()=>{try{const r=await fetch('/api/twilio-balance');const d=await r.json();const el=document.getElementById('twilio-bal');if(d.ok)el.textContent='$'+parseFloat(d.balance).toFixed(2)+' '+d.currency;}catch(e){}})();</script>
+  <script>(async()=>{if(!('serviceWorker' in navigator)||!('PushManager' in window))return;function b64(s){const p='='.repeat((4-s.length%4)%4);const b=(s+p).replace(/-/g,'+').replace(/_/g,'/');const r=atob(b);return Uint8Array.from([...r].map(c=>c.charCodeAt(0)));}try{const reg=await navigator.serviceWorker.register('/sw.js');if(Notification.permission==='granted'){const ex=await reg.pushManager.getSubscription();if(!ex){const kr=await fetch('/api/push-key');const{key}=await kr.json();const sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:b64(key)});await fetch('/api/push-subscribe',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(sub)});}}}catch(e){}})();</script>
   <div class="nav">
     <a href="/inbox" class="${active==='inbox'?'active':''}">Inbox</a>
     <a href="/schedule" class="${active==='schedule'?'active':''}">Schedule</a>
@@ -425,6 +459,8 @@ app.post('/webhook', async (req, res) => {
   const reply = addReply({ from, clientName, body, messageSid });
   if (!reply) return res.set('Content-Type', 'text/xml').send('<Response></Response>'); // duplicate webhook
   console.log(`📩 Reply from ${clientName} (${rawPhone}): "${body}"`);
+
+  sendPushToArtist(`💬 ${clientName}`, body.slice(0, 120));
 
   if (process.env.TEMPLATE_SID_ARTIST_NOTIFICATION) {
     const msg = messages.artistNotification(clientName, rawPhone, body);
@@ -735,6 +771,34 @@ app.get('/inbox', requireAuth, (req, res) => {
         });
       })();
     </script>` : ''}
+    <div id="notif-prompt" style="display:none;background:rgba(34,197,94,.06);border:1px solid rgba(34,197,94,.2);border-radius:12px;padding:14px 16px;margin-bottom:12px;align-items:center;gap:12px;animation:fadeUp .4s var(--ease) both;">
+      <div style="flex:1;"><div style="font-size:13px;font-weight:600;color:#22c55e;margin-bottom:2px;">Enable push notifications</div><div style="font-size:12px;color:var(--text2);">Get an instant alert on this device every time a client replies — no WhatsApp needed.</div></div>
+      <button id="notif-btn" style="background:#22c55e;color:#000;border:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;">Enable</button>
+      <button onclick="document.getElementById('notif-prompt').remove()" style="background:transparent;border:none;color:var(--text3);font-size:18px;cursor:pointer;padding:0 4px;">✕</button>
+    </div>
+    <script>
+      (async()=>{
+        if(!('serviceWorker' in navigator)||!('PushManager' in window))return;
+        if(Notification.permission==='granted'||Notification.permission==='denied')return;
+        document.getElementById('notif-prompt').style.display='flex';
+        function b64(s){const p='='.repeat((4-s.length%4)%4);const b=(s+p).replace(/-/g,'+').replace(/_/g,'/');const r=atob(b);return Uint8Array.from([...r].map(c=>c.charCodeAt(0)));}
+        document.getElementById('notif-btn').addEventListener('click',async()=>{
+          const btn=document.getElementById('notif-btn');
+          btn.textContent='...';btn.disabled=true;
+          try{
+            const perm=await Notification.requestPermission();
+            if(perm!=='granted'){document.getElementById('notif-prompt').remove();return;}
+            const reg=await navigator.serviceWorker.ready;
+            const kr=await fetch('/api/push-key');
+            const{key}=await kr.json();
+            const sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:b64(key)});
+            await fetch('/api/push-subscribe',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(sub)});
+            document.getElementById('notif-prompt').innerHTML='<div style="color:#22c55e;font-size:13px;font-weight:500;">✅ Push notifications enabled — you will be alerted on this device for every client reply.</div>';
+            setTimeout(()=>document.getElementById('notif-prompt')?.remove(),3000);
+          }catch(e){btn.textContent='Enable';btn.disabled=false;}
+        });
+      })();
+    </script>
     <div class="actions">
       <span class="badge ${unread === 0 ? 'zero' : ''}">${unread === 0 ? 'All read' : unread + ' unread'}</span>
       <div style="flex:1;"></div>
@@ -1380,6 +1444,32 @@ app.post('/api/send-manually', requireAuth, async (req, res) => {
   } else {
     res.json({ ok: false, error: result.error });
   }
+});
+
+// ─── Service worker ──────────────────────────────────────────────────────────
+app.get('/sw.js', (req, res) => {
+  res.setHeader('Content-Type', 'application/javascript');
+  res.setHeader('Service-Worker-Allowed', '/');
+  res.sendFile(require('path').resolve(__dirname, 'sw.js'));
+});
+
+// ─── Web Push API ─────────────────────────────────────────────────────────────
+app.get('/api/push-key', requireAuth, (req, res) => {
+  res.json({ key: vapidKeys.publicKey });
+});
+
+app.post('/api/push-subscribe', requireAuth, (req, res) => {
+  const sub = req.body;
+  if (!sub || !sub.endpoint) return res.json({ ok: false, error: 'Invalid subscription' });
+  pushSub.addSub(sub);
+  console.log('🔔 Push subscription saved');
+  res.json({ ok: true });
+});
+
+app.delete('/api/push-subscribe', requireAuth, (req, res) => {
+  const { endpoint } = req.body;
+  if (endpoint) pushSub.removeSub(endpoint);
+  res.json({ ok: true });
 });
 
 // ─── Twilio balance ───────────────────────────────────────────────────────────
