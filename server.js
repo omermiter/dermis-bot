@@ -1164,20 +1164,25 @@ app.get('/schedule', requireAuth, (req, res) => {
         else if (data.sessions.length === 0) {
           sbox.innerHTML = '<span style="font-size:13px;color:#999;">No sessions this week.</span>';
         } else {
-          const labels = { reminder: '24h', aftercare: 'Aftercare', day_three: 'Day 3', day_seven: 'Day 7' };
+          const labels = { reminder: '24h', aftercare: 'Aftercare', day_three: 'Day 3' };
           sbox.innerHTML = data.sessions.map((s, i) => {
             const badges = Object.entries(labels).map(([key, label]) => {
               const sent = s.sent[key];
               if (sent) return \`<span style="font-size:11px;padding:2px 7px;border-radius:20px;background:rgba(34,197,94,.12);color:#22c55e;border:1px solid rgba(34,197,94,.25);">✅ \${label}</span>\`;
               const payload = JSON.stringify({ eventId: s.id, messageType: key, phone: s.phone, firstName: s.firstName, timeString: s.time });
               return \`<button onclick="sendManually(this,\${payload.replace(/"/g,'&quot;')})" style="font-size:11px;padding:2px 7px;border-radius:20px;background:#1f1f1f;color:#888;border:1px solid #2a2a2a;cursor:pointer;">⬜ \${label} ▶</button>\`;
-            }).join(' ');
+            });
+            const reviewBadge = s.reviewHandled
+              ? \`<span style="font-size:11px;padding:2px 7px;border-radius:20px;background:rgba(34,197,94,.12);color:#22c55e;border:1px solid rgba(34,197,94,.25);">✅ Review</span>\`
+              : \`<span style="font-size:11px;padding:2px 7px;border-radius:20px;background:#1f1f1f;color:#555;border:1px solid #2a2a2a;" title="Sent automatically after a positive Day 3 reply">⬜ Review</span>\`;
+            badges.push(reviewBadge);
+            const badgesHtml = badges.join(' ');
             return \`<div class="job-row" style="flex-direction:column;align-items:flex-start;gap:6px;animation:fadeUp .4s var(--ease) both;animation-delay:\${i*60}ms;">
               <div style="display:flex;justify-content:space-between;width:100%;align-items:center;">
                 <div class="job-label" style="direction:rtl;">\${s.title}</div>
                 <div style="font-size:11px;color:var(--text3);">\${s.date} · \${s.time}</div>
               </div>
-              <div style="display:flex;gap:4px;flex-wrap:wrap;">\${badges}</div>
+              <div style="display:flex;gap:4px;flex-wrap:wrap;">\${badgesHtml}</div>
             </div>\`;
           }).join('');
         }
@@ -1307,7 +1312,7 @@ app.get('/api/upcoming-sessions', requireAuth, async (req, res) => {
     const end = new Date(start);
     end.setDate(end.getDate() + 7);
     const sessions = await getSessionsInRange(start, end);
-    const MSG_TYPES = ['reminder', 'aftercare', 'day_three', 'day_seven'];
+    const MSG_TYPES = ['reminder', 'aftercare', 'day_three'];
     res.json({ ok: true, sessions: sessions.map(s => ({
       id: s.id,
       firstName: s.firstName,
@@ -1317,6 +1322,7 @@ app.get('/api/upcoming-sessions', requireAuth, async (req, res) => {
       time: s.timeString,
       title: s.title,
       sent: Object.fromEntries(MSG_TYPES.map(t => [t, wasAlreadySent(s.id, t)])),
+      reviewHandled: pendingReviews.hasReviewBeenHandled('whatsapp:' + s.rawPhone),
     })) });
   } catch (e) {
     res.json({ ok: false, error: e.message });
@@ -1339,7 +1345,6 @@ app.post('/api/send-manually', requireAuth, async (req, res) => {
     reminder:  () => messages.reminder(firstName, timeString || ''),
     aftercare: () => messages.aftercare(firstName),
     day_three: () => messages.healingCheckIn(firstName, ''),
-    day_seven: () => messages.healingCheckIn(firstName, ''),
   };
   if (!typeToMsg[messageType]) return res.json({ ok: false, error: 'Unknown type' });
 
