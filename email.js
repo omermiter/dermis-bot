@@ -1,23 +1,26 @@
-const nodemailer = require('nodemailer');
+const { Resend } = require('resend');
 
 const ARTIST_EMAIL = process.env.ARTIST_EMAIL || 'omer3107@gmail.com';
 
-function getTransporter() {
-  if (!process.env.GMAIL_APP_PASSWORD) return null;
-  return nodemailer.createTransport({
-    service: 'gmail',
-    auth: { user: ARTIST_EMAIL, pass: process.env.GMAIL_APP_PASSWORD },
-  });
+function getClient() {
+  if (!process.env.RESEND_API_KEY) return null;
+  return new Resend(process.env.RESEND_API_KEY);
 }
 
 async function sendEmail(subject, text) {
-  const t = getTransporter();
-  if (!t) {
-    console.warn('⚠️ GMAIL_APP_PASSWORD not set — email skipped');
-    return { success: false, error: 'GMAIL_APP_PASSWORD not set' };
+  const client = getClient();
+  if (!client) {
+    console.warn('⚠️ RESEND_API_KEY not set — email skipped');
+    return { success: false, error: 'RESEND_API_KEY not set' };
   }
   try {
-    await t.sendMail({ from: `DERMIS <${ARTIST_EMAIL}>`, to: ARTIST_EMAIL, subject, text });
+    const { error } = await client.emails.send({
+      from: 'DERMIS <onboarding@resend.dev>',
+      to: ARTIST_EMAIL,
+      subject,
+      text,
+    });
+    if (error) throw new Error(error.message);
     console.log(`📧 Email sent: ${subject}`);
     return { success: true };
   } catch (e) {
