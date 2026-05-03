@@ -21,6 +21,7 @@ const { sendToArtistTemplate, sendToArtist } = require('./whatsapp');
 const crypto = require('crypto');
 const webpush = require('web-push');
 const pushSub = require('./push-sub');
+const { sendEmail } = require('./email');
 
 // ─── WebAuthn (Face ID / Passkeys) ───────────────────────────────────────────
 const {
@@ -143,11 +144,17 @@ function verifyOtp(token, submitted) {
   return { ok: true, returnTo: entry.returnTo };
 }
 async function sendOtp(otp) {
-  if (!process.env.TEMPLATE_SID_OTP) {
-    console.error('❌ TEMPLATE_SID_OTP not set — cannot send OTP');
-    return { success: false, error: 'TEMPLATE_SID_OTP not configured' };
-  }
-  return sendToArtistTemplate(process.env.TEMPLATE_SID_OTP, { 1: otp });
+  const [wa, mail] = await Promise.allSettled([
+    process.env.TEMPLATE_SID_OTP
+      ? sendToArtistTemplate(process.env.TEMPLATE_SID_OTP, { 1: otp })
+      : Promise.resolve({ success: false, error: 'TEMPLATE_SID_OTP not set' }),
+    sendEmail('DERMIS Login Code', `Your DERMIS login code is: ${otp}\n\nThis code expires in 5 minutes.`),
+  ]);
+  const waOk  = wa.status   === 'fulfilled' && wa.value.success;
+  const mailOk = mail.status === 'fulfilled' && mail.value.success;
+  if (!waOk)   console.warn('⚠️  OTP WhatsApp failed:', wa.reason   || wa.value?.error);
+  if (!mailOk) console.warn('⚠️  OTP email failed:',   mail.reason  || mail.value?.error);
+  return { success: waOk || mailOk };
 }
 
 const app = express();
@@ -464,12 +471,21 @@ app.post('/webhook', async (req, res) => {
 
   if (process.env.TEMPLATE_SID_ARTIST_NOTIFICATION) {
     const msg = messages.artistNotification(clientName, rawPhone, body);
-    console.log(`🔔 Sending artist notification → SID: ${msg.templateSid}, vars: ${JSON.stringify(msg.variables)}`);
     sendToArtistTemplate(msg.templateSid, msg.variables)
-      .then(r => console.log(r.success ? `🔔 Artist notified` : `⚠️ Artist notification failed: ${r.error} (code: ${r.code})`))
-      .catch(e => console.error(`⚠️ Artist notification error: ${e.message} (code: ${e.code})`));
+      .then(r => {
+        if (r.success) {
+          console.log(`🔔 Artist notified via WhatsApp`);
+        } else {
+          console.warn(`⚠️ WhatsApp notification failed (${r.code}) — sending email fallback`);
+          sendEmail(`💬 ${clientName}`, `Reply from ${clientName} (${rawPhone}):\n\n${body}`).catch(() => {});
+        }
+      })
+      .catch(e => {
+        console.error(`⚠️ Artist notification error: ${e.message} — sending email fallback`);
+        sendEmail(`💬 ${clientName}`, `Reply from ${clientName} (${rawPhone}):\n\n${body}`).catch(() => {});
+      });
   } else {
-    console.log('⚠️ TEMPLATE_SID_ARTIST_NOTIFICATION not set — skipping artist notification');
+    sendEmail(`💬 ${clientName}`, `Reply from ${clientName} (${rawPhone}):\n\n${body}`).catch(() => {});
   }
 
   const day7Data = awaitingReplies.getAwaiting(from);
