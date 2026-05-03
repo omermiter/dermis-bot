@@ -81,4 +81,13 @@ function pruneOldRecords(days = 90) {
   return before - pending.length;
 }
 
-module.exports = { schedule, getDueReviews, markSent, hasReviewBeenHandled, pruneOldRecords };
+// Returns review counts for the current calendar month (Israel timezone)
+function getMonthlyReviewStats() {
+  const monthKey = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' }).slice(0, 7);
+  const isThisMonth = ts => ts && new Date(ts).toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' }).startsWith(monthKey);
+  const triggered = pending.filter(p => isThisMonth(p.sendAt)).length;
+  const sent = pending.filter(p => p.sent && isThisMonth(p.sentAt)).length;
+  return { triggered, sent };
+}
+
+module.exports = { schedule, getDueReviews, markSent, hasReviewBeenHandled, pruneOldRecords, getMonthlyReviewStats };

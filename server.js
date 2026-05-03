@@ -1015,6 +1015,8 @@ app.post('/test', requireAuth, async (req, res) => {
 
 // ─── Status page ─────────────────────────────────────────────────────────────
 const { getTodayStatus } = require('./job-state');
+const { getMonthlyStats } = require('./sent-events');
+const { getMonthlyReviewStats } = require('./pending-reviews');
 app.get('/status', requireAuth, (req, res) => {
   const today = getTodayStatus();
   const jobs = [
@@ -1047,6 +1049,28 @@ app.get('/status', requireAuth, (req, res) => {
     </div>`;
   }).join('');
 
+  const monthStats = getMonthlyStats();
+  const reviewStats = getMonthlyReviewStats();
+  const monthName = new Date().toLocaleDateString('en-US', { month: 'long', timeZone: 'Asia/Jerusalem' });
+  const replyRate = monthStats.dayThree > 0
+    ? Math.round((reviewStats.triggered / monthStats.dayThree) * 100) + '%'
+    : '—';
+  const statItems = [
+    { label: 'Sessions', value: monthStats.sessions },
+    { label: 'Day-3 sent', value: monthStats.dayThree },
+    { label: 'Reviews sent', value: reviewStats.sent },
+    { label: 'Reply rate', value: replyRate },
+  ];
+  const statsCard = `<div class="card">
+    <div class="card-title">📈 ${monthName} at a glance</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:4px;">
+      ${statItems.map(s => `<div style="background:var(--surface2);border-radius:10px;padding:14px 16px;">
+        <div style="font-size:24px;font-weight:700;color:var(--text);letter-spacing:-0.5px;">${s.value}</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:3px;text-transform:uppercase;letter-spacing:0.5px;">${s.label}</div>
+      </div>`).join('')}
+    </div>
+  </div>`;
+
   res.send(`<!DOCTYPE html>
 <html lang="en"><head>
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
@@ -1056,6 +1080,7 @@ app.get('/status', requireAuth, (req, res) => {
 </head><body>
   ${HEADER('status')}
   <div class="container">
+    ${statsCard}
     <div class="card">
       <div class="card-title">📊 Today's job status</div>
       ${rows}

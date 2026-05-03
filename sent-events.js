@@ -46,4 +46,17 @@ function pruneOldEntries() {
   return before - Object.keys(store).length;
 }
 
-module.exports = { wasAlreadySent, markSent, pruneOldEntries };
+// Returns stats for the current calendar month (Israel timezone)
+function getMonthlyStats() {
+  const monthKey = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' }).slice(0, 7);
+  const isThisMonth = ts => new Date(ts).toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' }).startsWith(monthKey);
+  let sessions = 0, dayThree = 0;
+  for (const [key, ts] of Object.entries(store)) {
+    if (!isThisMonth(ts)) continue;
+    if (key.endsWith('_reminder')) sessions++;
+    else if (key.endsWith('_day_three')) dayThree++;
+  }
+  return { sessions, dayThree };
+}
+
+module.exports = { wasAlreadySent, markSent, pruneOldEntries, getMonthlyStats };
