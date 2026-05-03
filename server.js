@@ -238,8 +238,12 @@ const HEADER = (active = '') => `
       <div class="header-title">DERMIS</div>
       <div class="header-sub">Studio Assistant</div>
     </div>
-    <a class="logout" href="/logout">Logout</a>
+    <div style="display:flex;align-items:center;gap:10px;">
+      <span id="twilio-bal" style="font-size:11px;color:var(--text3);"></span>
+      <a class="logout" href="/logout">Logout</a>
+    </div>
   </div>
+  <script>(async()=>{try{const r=await fetch('/api/twilio-balance');const d=await r.json();const el=document.getElementById('twilio-bal');if(d.ok)el.textContent='$'+parseFloat(d.balance).toFixed(2)+' '+d.currency;}catch(e){}})();</script>
   <div class="nav">
     <a href="/inbox" class="${active==='inbox'?'active':''}">Inbox</a>
     <a href="/schedule" class="${active==='schedule'?'active':''}">Schedule</a>
@@ -1356,6 +1360,18 @@ app.post('/api/send-manually', requireAuth, async (req, res) => {
     res.json({ ok: true });
   } else {
     res.json({ ok: false, error: result.error });
+  }
+});
+
+// ─── Twilio balance ───────────────────────────────────────────────────────────
+app.get('/api/twilio-balance', requireAuth, async (req, res) => {
+  try {
+    const twilio = require('twilio');
+    const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+    const bal = await client.balance.fetch();
+    res.json({ ok: true, balance: bal.balance, currency: bal.currency });
+  } catch (e) {
+    res.json({ ok: false, error: e.message });
   }
 });
 
