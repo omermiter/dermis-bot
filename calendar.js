@@ -13,18 +13,25 @@ async function getCalendarClient() {
   return google.calendar({ version: 'v3', auth });
 }
 
+async function getCalendarWriteClient() {
+  const auth = new google.auth.GoogleAuth({
+    keyFile: path.resolve(process.env.GOOGLE_SERVICE_ACCOUNT_KEY),
+    scopes: ['https://www.googleapis.com/auth/calendar.events'],
+  });
+  return google.calendar({ version: 'v3', auth });
+}
+
+const CANCELLED_PREFIX = '[CANCELLED] ';
+const SESSION_PREFIX = 'סשן עם ';
+
 // Parse event title: "סשן עם נועה" → { firstName: 'נועה', lastName: '', fullName: 'נועה' }
+// Also handles "[CANCELLED] סשן עם נועה"
 function parseTitleName(title) {
-  // Expected format: סשן עם Firstname
-  const prefix = 'סשן עם ';
-  if (!title.startsWith(prefix)) return null;
-  const firstName = title.slice(prefix.length).trim();
+  const base = title.startsWith(CANCELLED_PREFIX) ? title.slice(CANCELLED_PREFIX.length) : title;
+  if (!base.startsWith(SESSION_PREFIX)) return null;
+  const firstName = base.slice(SESSION_PREFIX.length).trim();
   if (!firstName) return null;
-  return {
-    firstName,
-    lastName: '',
-    fullName: firstName,
-  };
+  return { firstName, lastName: '', fullName: firstName };
 }
 
 // Parse description for phone number line: "Phone: 0501234567"
@@ -54,16 +61,20 @@ async function getSessionsInRange(startDate, endDate) {
   const sessions = [];
 
   for (const event of events) {
-    const title = event.summary || '';
-    if (!title.startsWith('סשן עם ')) continue; // skip non-session events
+    const rawTitle = event.summary || '';
+    const cancelled = rawTitle.startsWith(CANCELLED_PREFIX);
+    // Only process session events (with or without the cancelled prefix)
+    const base = cancelled ? rawTitle.slice(CANCELLED_PREFIX.length) : rawTitle;
+    if (!base.startsWith(SESSION_PREFIX)) continue;
 
-    const nameInfo = parseTitleName(title);
+    const nameInfo = parseTitleName(rawTitle);
     if (!nameInfo) continue;
 
     const phone = parsePhone(event.description);
     if (!phone) {
-      console.warn(`⚠️  No phone number found for event: "${title}" — skipping`);
-      continue;
+      if (!cancelled) console.warn(`⚠️  No phone number found for event: "${rawTitle}" — skipping`);
+      if (!cancelled) continue;
+      // Cancelled events may have had phone stripped — include them with a placeholder
     }
 
     const startTime = event.start.dateTime || event.start.date;
@@ -71,15 +82,16 @@ async function getSessionsInRange(startDate, endDate) {
 
     sessions.push({
       id: event.id,
-      title,
+      title: base,
       firstName: nameInfo.firstName,
       lastName: nameInfo.lastName,
       fullName: nameInfo.fullName,
-      phone: `whatsapp:${phone}`,
-      rawPhone: phone,
+      phone: phone ? `whatsapp:${phone}` : null,
+      rawPhone: phone || null,
       startTime: new Date(startTime),
       endTime: new Date(endTime),
       timeString: new Date(startTime).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jerusalem' }),
+      cancelled,
     });
   }
 
@@ -160,6 +172,21 @@ async function getStoryEvents(startDate, endDate) {
     });
 }
 
+// Mark a session as cancelled in Google Calendar (prefixes title with [CANCELLED])
+async function cancelSession(eventId) {
+  const calendar = await getCalendarWriteClient();
+  const { data: event } = await calendar.events.get({
+    calendarId: process.env.GOOGLE_CALENDAR_ID,
+    eventId,
+  });
+  if ((event.summary || '').startsWith(CANCELLED_PREFIX)) return; // already cancelled
+  await calendar.events.patch({
+    calendarId: process.env.GOOGLE_CALENDAR_ID,
+    eventId,
+    requestBody: { summary: CANCELLED_PREFIX + (event.summary || '') },
+  });
+}
+
 module.exports = {
   getTodaySessions,
   getTomorrowSessions,
@@ -167,4 +194,5 @@ module.exports = {
   getSessionsInRange,
   getPersonalReminderEvents,
   getStoryEvents,
+  cancelSession,
 };

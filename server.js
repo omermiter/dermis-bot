@@ -1269,6 +1269,15 @@ app.get('/schedule', requireAuth, (req, res) => {
         } else {
           const labels = { reminder: '24h', aftercare: 'Aftercare', day_three: 'Day 3' };
           sbox.innerHTML = data.sessions.map((s, i) => {
+            if (s.cancelled) {
+              return \`<div class="job-row" style="flex-direction:column;align-items:flex-start;gap:6px;animation:fadeUp .4s var(--ease) both;animation-delay:\${i*60}ms;opacity:.5;">
+                <div style="display:flex;justify-content:space-between;width:100%;align-items:center;">
+                  <div class="job-label" style="direction:rtl;text-decoration:line-through;">\${s.title}</div>
+                  <div style="font-size:11px;color:var(--text3);">\${s.date} · \${s.time}</div>
+                </div>
+                <span style="font-size:11px;padding:2px 7px;border-radius:20px;background:rgba(239,68,68,.1);color:#ef4444;border:1px solid rgba(239,68,68,.25);">🚫 Cancelled</span>
+              </div>\`;
+            }
             const badges = Object.entries(labels).map(([key, label]) => {
               const sent = s.sent[key];
               if (sent) return \`<span style="font-size:11px;padding:2px 7px;border-radius:20px;background:rgba(34,197,94,.12);color:#22c55e;border:1px solid rgba(34,197,94,.25);">✅ \${label}</span>\`;
@@ -1283,7 +1292,10 @@ app.get('/schedule', requireAuth, (req, res) => {
             return \`<div class="job-row" style="flex-direction:column;align-items:flex-start;gap:6px;animation:fadeUp .4s var(--ease) both;animation-delay:\${i*60}ms;">
               <div style="display:flex;justify-content:space-between;width:100%;align-items:center;">
                 <div class="job-label" style="direction:rtl;">\${s.title}</div>
-                <div style="font-size:11px;color:var(--text3);">\${s.date} · \${s.time}</div>
+                <div style="display:flex;align-items:center;gap:8px;">
+                  <div style="font-size:11px;color:var(--text3);">\${s.date} · \${s.time}</div>
+                  <button onclick="cancelSession(this,'\${s.id}','\${s.firstName}')" style="font-size:11px;padding:2px 8px;border-radius:20px;background:transparent;color:#666;border:1px solid #2a2a2a;cursor:pointer;" title="Cancel session">✕</button>
+                </div>
               </div>
               <div style="display:flex;gap:4px;flex-wrap:wrap;">\${badgesHtml}</div>
             </div>\`;
@@ -1343,6 +1355,20 @@ app.get('/schedule', requireAuth, (req, res) => {
         }
       } catch(e) { cbox.innerHTML = '<span style="font-size:13px;color:#A32D2D;">❌ Failed to load story schedule.</span>'; }
     })();
+
+    async function cancelSession(btn, eventId, name) {
+      if (!confirm(\`Cancel \${name}'s session? This will mark it as cancelled in Google Calendar and stop all scheduled messages.\`)) return;
+      btn.disabled = true; btn.textContent = '⏳';
+      try {
+        const r = await fetch('/api/cancel-session', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ eventId }),
+        });
+        const data = await r.json();
+        if (data.ok) { location.reload(); }
+        else { btn.textContent = '❌'; btn.title = data.error || 'Failed'; btn.disabled = false; }
+      } catch(e) { btn.textContent = '❌'; btn.disabled = false; }
+    }
 
     async function sendManually(btn, payload) {
       btn.disabled = true; btn.textContent = '⏳ Sending...';
@@ -1426,6 +1452,7 @@ app.get('/api/upcoming-sessions', requireAuth, async (req, res) => {
       title: s.title,
       sent: Object.fromEntries(MSG_TYPES.map(t => [t, wasAlreadySent(s.id, t)])),
       reviewHandled: pendingReviews.hasReviewBeenHandled('whatsapp:' + s.rawPhone),
+      cancelled: s.cancelled || false,
     })) });
   } catch (e) {
     res.json({ ok: false, error: e.message });
@@ -1496,6 +1523,21 @@ app.get('/api/twilio-balance', requireAuth, async (req, res) => {
     const bal = await client.balance.fetch();
     res.json({ ok: true, balance: bal.balance, currency: bal.currency });
   } catch (e) {
+    res.json({ ok: false, error: e.message });
+  }
+});
+
+// ─── Cancel session ──────────────────────────────────────────────────────────
+app.post('/api/cancel-session', requireAuth, async (req, res) => {
+  const { eventId } = req.body;
+  if (!eventId) return res.json({ ok: false, error: 'Missing eventId' });
+  try {
+    const { cancelSession } = require('./calendar');
+    await cancelSession(eventId);
+    console.log(`🚫 Session cancelled: ${eventId}`);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error(`❌ Cancel session failed: ${e.message}`);
     res.json({ ok: false, error: e.message });
   }
 });

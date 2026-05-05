@@ -51,6 +51,7 @@ async function runJob_24hReminders() {
   try {
     const sessions = await getTomorrowSessions();
     for (const session of sessions) {
+      if (session.cancelled) { log(`   Skipping ${session.fullName} — cancelled`); continue; }
       if (wasAlreadySent(session.id, 'reminder')) {
         log(`   Skipping ${session.fullName} — reminder already sent`);
         continue;
@@ -79,6 +80,7 @@ async function runJob_aftercare() {
   try {
     const sessions = await getTodaySessions();
     for (const session of sessions) {
+      if (session.cancelled) { log(`   Skipping ${session.fullName} — cancelled`); continue; }
       if (wasAlreadySent(session.id, 'aftercare')) {
         log(`   Skipping ${session.fullName} — aftercare already sent`);
         continue;
@@ -103,6 +105,7 @@ async function runJob_dayThreeAftercare() {
   try {
     const sessions = await getSessionsFromDaysAgo(3);
     for (const session of sessions) {
+      if (session.cancelled) { log(`   Skipping ${session.fullName} — cancelled`); continue; }
       if (wasAlreadySent(session.id, 'day_three')) {
         log(`   Skipping ${session.fullName} — day-3 check already sent`);
         continue;
