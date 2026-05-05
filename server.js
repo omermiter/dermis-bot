@@ -708,7 +708,7 @@ app.get('/inbox', requireAuth, (req, res) => {
           ${!r.read ? '<span class="dot"></span>' : ''}
         </div>
         <div class="reply-phone">
-          ${escHtml(r.from.replace('whatsapp:', ''))}
+          <a href="https://wa.me/${escHtml(r.from.replace('whatsapp:+', '').replace('whatsapp:', ''))}" target="_blank" onclick="event.stopPropagation()" style="color:inherit;text-decoration:none;">${escHtml(r.from.replace('whatsapp:', ''))}</a>
           ${r.messageSid ? `<a href="https://console.twilio.com/us1/monitor/logs/sms/${escHtml(r.messageSid)}" target="_blank" onclick="event.stopPropagation()" style="margin-left:8px;font-size:11px;color:#888;text-decoration:underline;">View in Twilio ↗</a>` : ''}
         </div>
         <div class="reply-body">${escHtml(r.body)}</div>
