@@ -21,6 +21,12 @@ async function getCalendarWriteClient() {
   return google.calendar({ version: 'v3', auth });
 }
 
+function getCalendarIds() {
+  const ids = [process.env.GOOGLE_CALENDAR_ID].filter(Boolean);
+  if (process.env.GOOGLE_CALENDAR_ID_OCD) ids.push(process.env.GOOGLE_CALENDAR_ID_OCD);
+  return ids;
+}
+
 const CANCELLED_PREFIX = '[CANCELLED] ';
 const SESSION_PREFIX = 'סשן עם ';
 
@@ -48,19 +54,21 @@ function parsePhone(description) {
 // Get all sessions within a date range
 async function getSessionsInRange(startDate, endDate) {
   const calendar = await getCalendarClient();
+  const calendarIds = getCalendarIds();
 
-  const response = await calendar.events.list({
-    calendarId: process.env.GOOGLE_CALENDAR_ID,
-    timeMin: startDate.toISOString(),
-    timeMax: endDate.toISOString(),
-    singleEvents: true,
-    orderBy: 'startTime',
-  });
+  const allEvents = (await Promise.all(calendarIds.map(calendarId =>
+    calendar.events.list({
+      calendarId,
+      timeMin: startDate.toISOString(),
+      timeMax: endDate.toISOString(),
+      singleEvents: true,
+      orderBy: 'startTime',
+    }).then(r => (r.data.items || []).map(e => ({ ...e, _calendarId: calendarId })))
+  ))).flat();
 
-  const events = response.data.items || [];
   const sessions = [];
 
-  for (const event of events) {
+  for (const event of allEvents) {
     const rawTitle = event.summary || '';
     const cancelled = rawTitle.startsWith(CANCELLED_PREFIX);
     // Only process session events (with or without the cancelled prefix)
@@ -82,6 +90,7 @@ async function getSessionsInRange(startDate, endDate) {
 
     sessions.push({
       id: event.id,
+      calendarId: event._calendarId,
       title: base,
       firstName: nameInfo.firstName,
       lastName: nameInfo.lastName,
@@ -95,6 +104,7 @@ async function getSessionsInRange(startDate, endDate) {
     });
   }
 
+  sessions.sort((a, b) => a.startTime - b.startTime);
   return sessions;
 }
 
@@ -130,14 +140,19 @@ async function getSessionsFromDaysAgo(days) {
 // Get all events with "remind" in their description within a date range
 async function getPersonalReminderEvents(startDate, endDate) {
   const calendar = await getCalendarClient();
-  const response = await calendar.events.list({
-    calendarId: process.env.GOOGLE_CALENDAR_ID,
-    timeMin: startDate.toISOString(),
-    timeMax: endDate.toISOString(),
-    singleEvents: true,
-    orderBy: 'startTime',
-  });
-  return (response.data.items || [])
+  const calendarIds = getCalendarIds();
+
+  const allItems = (await Promise.all(calendarIds.map(calendarId =>
+    calendar.events.list({
+      calendarId,
+      timeMin: startDate.toISOString(),
+      timeMax: endDate.toISOString(),
+      singleEvents: true,
+      orderBy: 'startTime',
+    }).then(r => r.data.items || [])
+  ))).flat();
+
+  return allItems
     .filter(e => (e.description || '').toLowerCase().includes('remind'))
     .map(e => ({
       id: e.id,
@@ -145,21 +160,27 @@ async function getPersonalReminderEvents(startDate, endDate) {
       startTime: new Date(e.start.dateTime || e.start.date),
       timeString: new Date(e.start.dateTime || e.start.date)
         .toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jerusalem' }),
-    }));
+    }))
+    .sort((a, b) => a.startTime - b.startTime);
 }
 
 // Get all events containing the word "story" in title or description
 async function getStoryEvents(startDate, endDate) {
   const calendar = await getCalendarClient();
-  const response = await calendar.events.list({
-    calendarId: process.env.GOOGLE_CALENDAR_ID,
-    timeMin: startDate.toISOString(),
-    timeMax: endDate.toISOString(),
-    singleEvents: true,
-    orderBy: 'startTime',
-  });
+  const calendarIds = getCalendarIds();
+
+  const allItems = (await Promise.all(calendarIds.map(calendarId =>
+    calendar.events.list({
+      calendarId,
+      timeMin: startDate.toISOString(),
+      timeMax: endDate.toISOString(),
+      singleEvents: true,
+      orderBy: 'startTime',
+    }).then(r => r.data.items || [])
+  ))).flat();
+
   const re = /\bstory\b/i;
-  return (response.data.items || [])
+  return allItems
     .filter(e => re.test(e.summary || '') || re.test(e.description || ''))
     .map(e => {
       const startTime = new Date(e.start.dateTime || e.start.date);
@@ -169,22 +190,31 @@ async function getStoryEvents(startDate, endDate) {
         startTime,
         timeString: startTime.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jerusalem' }),
       };
-    });
+    })
+    .sort((a, b) => a.startTime - b.startTime);
 }
 
 // Mark a session as cancelled in Google Calendar (prefixes title with [CANCELLED])
 async function cancelSession(eventId) {
   const calendar = await getCalendarWriteClient();
-  const { data: event } = await calendar.events.get({
-    calendarId: process.env.GOOGLE_CALENDAR_ID,
-    eventId,
-  });
-  if ((event.summary || '').startsWith(CANCELLED_PREFIX)) return; // already cancelled
-  await calendar.events.patch({
-    calendarId: process.env.GOOGLE_CALENDAR_ID,
-    eventId,
-    requestBody: { summary: CANCELLED_PREFIX + (event.summary || '') },
-  });
+  const calendarIds = getCalendarIds();
+
+  for (const calendarId of calendarIds) {
+    try {
+      const { data: event } = await calendar.events.get({ calendarId, eventId });
+      if ((event.summary || '').startsWith(CANCELLED_PREFIX)) return; // already cancelled
+      await calendar.events.patch({
+        calendarId,
+        eventId,
+        requestBody: { summary: CANCELLED_PREFIX + (event.summary || '') },
+      });
+      return;
+    } catch (e) {
+      if (e.code !== 404 && e.status !== 404) throw e;
+      // event not in this calendar — try next
+    }
+  }
+  throw new Error(`Event ${eventId} not found in any configured calendar`);
 }
 
 module.exports = {
